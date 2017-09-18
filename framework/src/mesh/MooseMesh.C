@@ -1003,7 +1003,8 @@ MooseMesh::getBoundaryIDs(const std::vector<BoundaryName> & boundary_name,
 
   // On a distributed mesh we may have boundary ids that only exist on
   // other processors.
-  _communicator.set_union(boundary_ids);
+  if (!this->getMesh().is_replicated())
+    _communicator.set_union(boundary_ids);
 
   BoundaryID max_boundary_id = boundary_ids.empty() ? 0 : *(boundary_ids.rbegin());
 
@@ -2383,7 +2384,7 @@ MooseMesh::getPatchUpdateStrategy() const
   return _patch_update_strategy;
 }
 
-MeshTools::BoundingBox
+BoundingBox
 MooseMesh::getInflatedProcessorBoundingBox(Real inflation_multiplier) const
 {
   // Grab a bounding box to speed things up.  Note that
