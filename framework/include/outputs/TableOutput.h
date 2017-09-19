@@ -22,7 +22,7 @@
 
 class TableOutput;
 
-template<>
+template <>
 InputParameters validParams<TableOutput>();
 
 /**
@@ -36,17 +36,15 @@ InputParameters validParams<TableOutput>();
  *
  * @see CSV Console
  */
-class TableOutput : public AdvancedOutput<FileOutput>
+class TableOutput : public AdvancedOutput
 {
 public:
-
   /**
    * Class constructor.
    */
   TableOutput(const InputParameters & parameters);
 
 protected:
-
   /**
    * Populates the tables with scalar aux variables
    *

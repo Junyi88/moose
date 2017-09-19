@@ -18,12 +18,11 @@
 #include "MeshModifier.h"
 #include "MooseEnum.h"
 
-// libMesh includes
 #include "libmesh/vector_value.h"
 
 class Transform;
 
-template<>
+template <>
 InputParameters validParams<Transform>();
 
 class Transform : public MeshModifier

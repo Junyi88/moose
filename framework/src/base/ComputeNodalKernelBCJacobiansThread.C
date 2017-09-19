@@ -13,19 +13,22 @@
 /****************************************************************/
 
 #include "ComputeNodalKernelBCJacobiansThread.h"
+
+// MOOSE includes
+#include "Assembly.h"
 #include "AuxiliarySystem.h"
 #include "FEProblem.h"
+#include "MooseVariable.h"
 #include "NodalKernel.h"
 
-// libmesh includes
 #include "libmesh/threads.h"
 
-ComputeNodalKernelBCJacobiansThread::ComputeNodalKernelBCJacobiansThread(FEProblem & fe_problem,
-                                                                         AuxiliarySystem & sys,
-                                                                         const MooseObjectWarehouse<NodalKernel> & nodal_kernels,
-                                                                         SparseMatrix<Number> & jacobian) :
-    ThreadedNodeLoop<ConstBndNodeRange, ConstBndNodeRange::const_iterator>(fe_problem),
-    _sys(sys),
+ComputeNodalKernelBCJacobiansThread::ComputeNodalKernelBCJacobiansThread(
+    FEProblemBase & fe_problem,
+    const MooseObjectWarehouse<NodalKernel> & nodal_kernels,
+    SparseMatrix<Number> & jacobian)
+  : ThreadedNodeLoop<ConstBndNodeRange, ConstBndNodeRange::const_iterator>(fe_problem),
+    _aux_sys(fe_problem.getAuxiliarySystem()),
     _nodal_kernels(nodal_kernels),
     _jacobian(jacobian),
     _num_cached(0)
@@ -33,9 +36,10 @@ ComputeNodalKernelBCJacobiansThread::ComputeNodalKernelBCJacobiansThread(FEProbl
 }
 
 // Splitting Constructor
-ComputeNodalKernelBCJacobiansThread::ComputeNodalKernelBCJacobiansThread(ComputeNodalKernelBCJacobiansThread & x, Threads::split split) :
-    ThreadedNodeLoop<ConstBndNodeRange, ConstBndNodeRange::const_iterator>(x, split),
-    _sys(x._sys),
+ComputeNodalKernelBCJacobiansThread::ComputeNodalKernelBCJacobiansThread(
+    ComputeNodalKernelBCJacobiansThread & x, Threads::split split)
+  : ThreadedNodeLoop<ConstBndNodeRange, ConstBndNodeRange::const_iterator>(x, split),
+    _aux_sys(x._aux_sys),
     _nodal_kernels(x._nodal_kernels),
     _jacobian(x._jacobian),
     _num_cached(0)
@@ -55,7 +59,7 @@ ComputeNodalKernelBCJacobiansThread::onNode(ConstBndNodeRange::const_iterator & 
 
   BoundaryID boundary_id = bnode->_bnd_id;
 
-  std::vector<std::pair<MooseVariable *, MooseVariable *> > & ce = _fe_problem.couplingEntries(_tid);
+  std::vector<std::pair<MooseVariable *, MooseVariable *>> & ce = _fe_problem.couplingEntries(_tid);
   for (const auto & it : ce)
   {
     MooseVariable & ivariable = *(it.first);
@@ -65,12 +69,12 @@ ComputeNodalKernelBCJacobiansThread::onNode(ConstBndNodeRange::const_iterator & 
     unsigned int jvar = jvariable.number();
 
     // The NodalKernels that are active and are coupled to the jvar in question
-    std::vector<MooseSharedPointer<NodalKernel> > active_involved_kernels;
+    std::vector<std::shared_ptr<NodalKernel>> active_involved_kernels;
 
     if (_nodal_kernels.hasActiveBoundaryObjects(boundary_id, _tid))
     {
       // Loop over each NodalKernel to see if it's involved with the jvar
-      const std::vector<MooseSharedPointer<NodalKernel> > & objects = _nodal_kernels.getActiveBoundaryObjects(boundary_id, _tid);
+      const auto & objects = _nodal_kernels.getActiveBoundaryObjects(boundary_id, _tid);
       for (const auto & nodal_kernel : objects)
       {
         // If this NodalKernel isn't operating on this ivar... skip it
@@ -101,7 +105,7 @@ ComputeNodalKernelBCJacobiansThread::onNode(ConstBndNodeRange::const_iterator & 
     if (!active_involved_kernels.empty())
     {
       // prepare variables
-      for (const auto & it : _sys._nodal_vars[_tid])
+      for (const auto & it : _aux_sys._nodal_vars[_tid])
       {
         MooseVariable * var = it.second;
         var->prepareAux();
@@ -112,7 +116,7 @@ ComputeNodalKernelBCJacobiansThread::onNode(ConstBndNodeRange::const_iterator & 
         Node * node = bnode->_node;
         if (node->processor_id() == _fe_problem.processor_id())
         {
-          _fe_problem.reinitNodeFace(node, boundary_id,  _tid);
+          _fe_problem.reinitNodeFace(node, boundary_id, _tid);
           for (const auto & nodal_kernel : active_involved_kernels)
             nodal_kernel->computeOffDiagJacobian(jvar);
 
@@ -120,7 +124,7 @@ ComputeNodalKernelBCJacobiansThread::onNode(ConstBndNodeRange::const_iterator & 
         }
       }
 
-      if (_num_cached == 20) //cache 20 nodes worth before adding into the jacobian
+      if (_num_cached == 20) // cache 20 nodes worth before adding into the jacobian
       {
         _num_cached = 0;
         Threads::spin_mutex::scoped_lock lock(Threads::spin_mtx);

@@ -8,28 +8,27 @@
 #ifndef POROUSFLOWPERMEABILITYCONST_H
 #define POROUSFLOWPERMEABILITYCONST_H
 
-#include "PorousFlowPermeabilityUnity.h"
+#include "PorousFlowPermeabilityBase.h"
 
-//Forward Declarations
+// Forward Declarations
 class PorousFlowPermeabilityConst;
 
-template<>
+template <>
 InputParameters validParams<PorousFlowPermeabilityConst>();
 
 /**
- * Material designed to provide the permeability tensor
- * which is assumed constant
+ * Material designed to provide a constant permeability tensor
  */
-class PorousFlowPermeabilityConst : public PorousFlowPermeabilityUnity
+class PorousFlowPermeabilityConst : public PorousFlowPermeabilityBase
 {
 public:
   PorousFlowPermeabilityConst(const InputParameters & parameters);
 
 protected:
+  void computeQpProperties() override;
+
   /// constant value of permeability tensor
   const RealTensorValue _input_permeability;
-
-  void computeQpProperties();
 };
 
-#endif //POROUSFLOWPERMEABILITYCONST_H
+#endif // POROUSFLOWPERMEABILITYCONST_H

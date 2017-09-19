@@ -5,7 +5,6 @@
 /*             See LICENSE for full restrictions                */
 /****************************************************************/
 
-
 #ifndef POROUSFLOWSINK_H
 #define POROUSFLOWSINK_H
 
@@ -16,7 +15,7 @@
 // Forward Declarations
 class PorousFlowSink;
 
-template<>
+template <>
 InputParameters validParams<PorousFlowSink>();
 
 /**
@@ -28,28 +27,25 @@ InputParameters validParams<PorousFlowSink>();
  *      where perm_nn is the permeability tensor projected
  *      to the normal direction.
  *  (3) the mass_fraction of a component at the nodes
+ *  (4) the enthalpy of the phase
+ *  (5) the internal energy of the phase
+ *  (6) the thermal conductivity of the medium
  */
 class PorousFlowSink : public IntegratedBC
 {
 public:
-
   PorousFlowSink(const InputParameters & parameters);
 
 protected:
-  virtual void computeResidual();
-
-  virtual Real computeQpResidual();
-
-  virtual void computeJacobian();
-
-  virtual void computeJacobianBlock(unsigned int jvar);
-
-  virtual Real computeQpJacobian();
-
-  virtual Real computeQpOffDiagJacobian(unsigned int jvar);
+  virtual Real computeQpResidual() override;
+  virtual Real computeQpJacobian() override;
+  virtual Real computeQpOffDiagJacobian(unsigned int jvar) override;
 
   /// PorousFlow UserObject
   const PorousFlowDictator & _dictator;
+
+  /// Whether this BC involves fluid (whether the user has supplied a fluid phase number)
+  const bool _involves_fluid;
 
   /// The phase number
   const unsigned int _ph;
@@ -57,62 +53,104 @@ protected:
   /// Whether the flux will be multiplied by the mass fraction
   const bool _use_mass_fraction;
 
+  /// Whether there is a "mass_fraction" Material.  This is just for error checking
+  const bool _has_mass_fraction;
+
   /// The component number (only used if _use_mass_fraction==true)
   const unsigned int _sp;
 
   /// whether to multiply the sink flux by permeability*density/viscosity
   const bool _use_mobility;
 
+  /// Whether there are Materials that can form "mobility".  This is just for error checking
+  const bool _has_mobility;
+
   /// whether to multiply the sink flux by relative permeability
   const bool _use_relperm;
+
+  /// Whether there is a "relperm" Material.  This is just for error checking
+  const bool _has_relperm;
+
+  /// whether to multiply the sink flux by enthalpy
+  const bool _use_enthalpy;
+
+  /// whether there is an "enthalpy" Material.  This is just for error checking
+  const bool _has_enthalpy;
+
+  /// whether to multiply the sink flux by internal_energy
+  const bool _use_internal_energy;
+
+  /// whether there is an "internal_energy" Material.  This is just for error checking
+  const bool _has_internal_energy;
+
+  /// whether to multiply the sink flux by thermal_conductivity
+  const bool _use_thermal_conductivity;
+
+  /// whether there is an "thermal_conductivity" Material.  This is just for error checking
+  const bool _has_thermal_conductivity;
 
   /// The flux
   Function & _m_func;
 
   /// Permeability of porous material
-  const MaterialProperty<RealTensorValue> & _permeability;
+  const MaterialProperty<RealTensorValue> * const _permeability;
 
   /// d(Permeability)/d(PorousFlow variable)
-  const MaterialProperty<std::vector<RealTensorValue> > & _dpermeability_dvar;
+  const MaterialProperty<std::vector<RealTensorValue>> * const _dpermeability_dvar;
+
+  /// d(Permeability)/d(grad(PorousFlow variable))
+  const MaterialProperty<std::vector<std::vector<RealTensorValue>>> * const _dpermeability_dgradvar;
 
   /// Fluid density for each phase (at the node)
-  const MaterialProperty<std::vector<Real> > & _fluid_density_node;
+  const MaterialProperty<std::vector<Real>> * const _fluid_density_node;
 
   /// d(Fluid density for each phase (at the node))/d(PorousFlow variable)
-  const MaterialProperty<std::vector<std::vector<Real> > > & _dfluid_density_node_dvar;
+  const MaterialProperty<std::vector<std::vector<Real>>> * const _dfluid_density_node_dvar;
 
   /// Viscosity of each component in each phase
-  const MaterialProperty<std::vector<Real> > & _fluid_viscosity;
+  const MaterialProperty<std::vector<Real>> * const _fluid_viscosity;
 
   /// d(Viscosity of each component in each phase)/d(PorousFlow variable)
-  const MaterialProperty<std::vector<std::vector<Real> > > & _dfluid_viscosity_dvar;
+  const MaterialProperty<std::vector<std::vector<Real>>> * const _dfluid_viscosity_dvar;
 
   /// Relative permeability of each phase
-  const MaterialProperty<std::vector<Real> > & _relative_permeability;
+  const MaterialProperty<std::vector<Real>> * const _relative_permeability;
 
   /// d(Relative permeability of each phase)/d(PorousFlow variable)
-  const MaterialProperty<std::vector<std::vector<Real> > > & _drelative_permeability_dvar;
+  const MaterialProperty<std::vector<std::vector<Real>>> * const _drelative_permeability_dvar;
 
   /// Mass fraction of each component in each phase
-  const MaterialProperty<std::vector<std::vector<Real> > > & _mass_fractions;
+  const MaterialProperty<std::vector<std::vector<Real>>> * const _mass_fractions;
 
   /// d(Mass fraction of each component in each phase)/d(PorousFlow variable)
-  const MaterialProperty<std::vector<std::vector<std::vector<Real> > > > & _dmass_fractions_dvar;
+  const MaterialProperty<std::vector<std::vector<std::vector<Real>>>> * const _dmass_fractions_dvar;
 
-  /// Node Number information held in the quadpoints of the Materials
-  const MaterialProperty<unsigned int> & _node_number;
+  /// Enthalpy of each phase
+  const MaterialProperty<std::vector<Real>> * const _enthalpy;
 
-  /// _qp_map[node_number] = the quadpoint in the PorousFlow Materials that hold info for node = node_number
-  std::vector<int> _qp_map;
+  /// d(enthalpy of each phase)/d(PorousFlow variable)
+  const MaterialProperty<std::vector<std::vector<Real>>> * const _denthalpy_dvar;
+
+  /// Internal_Energy of each phase
+  const MaterialProperty<std::vector<Real>> * const _internal_energy;
+
+  /// d(internal_energy of each phase)/d(PorousFlow variable)
+  const MaterialProperty<std::vector<std::vector<Real>>> * const _dinternal_energy_dvar;
+
+  /// Thermal_Conductivity of porous material
+  const MaterialProperty<RealTensorValue> * const _thermal_conductivity;
+
+  /// d(Thermal_Conductivity)/d(PorousFlow variable)
+  const MaterialProperty<std::vector<RealTensorValue>> * const _dthermal_conductivity_dvar;
 
   /// derivative of residual with respect to the jvar variable
-  Real jac(unsigned int jvar);
+  Real jac(unsigned int jvar) const;
 
   /// The flux gets multiplied by this quantity
-  virtual Real multiplier();
+  virtual Real multiplier() const;
 
   /// d(multiplier)/d(Porous flow variable pvar)
-  virtual Real dmultiplier_dvar(unsigned int pvar);
+  virtual Real dmultiplier_dvar(unsigned int pvar) const;
 };
 
-#endif //POROUSFLOWSINK_H
+#endif // POROUSFLOWSINK_H

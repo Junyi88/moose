@@ -7,7 +7,17 @@
 #ifndef RANKTWOSCALARTOOLS_H
 #define RANKTWOSCALARTOOLS_H
 
+// MOOSE includes
+#include "MooseTypes.h"
+
+// Forward declarations
+class MooseEnum;
 class RankTwoTensor;
+
+namespace libMesh
+{
+class Point;
+}
 
 namespace RankTwoScalarTools
 {
@@ -27,7 +37,12 @@ MooseEnum scalarOptions();
  * direction is required only for directionValueTensor
  * for all other cases, these parameters will take the default values
  */
-Real getQuantity(const RankTwoTensor & tensor, const MooseEnum scalar_type, const Point & point1, const Point & point2, const Point & curr_point, Point & direction);
+Real getQuantity(const RankTwoTensor & tensor,
+                 const MooseEnum scalar_type,
+                 const Point & point1,
+                 const Point & point2,
+                 const Point & curr_point,
+                 Point & direction);
 
 /*
  * Extracts the value of the tensor component at the specified indices
@@ -54,6 +69,12 @@ Real vonMisesStress(const RankTwoTensor & tensor);
  * Users must take care to pass in the plastic inelastic_strain only.
  */
 Real equivalentPlasticStrain(const RankTwoTensor & strain);
+
+/*
+ * The effective strain is calculated as
+ * \epsilon_{eff} = \sqrt{\frac{2}{3}\epsilon_{ij} \epsilon_{ij}}
+ */
+Real effectiveStrain(const RankTwoTensor & strain);
 
 /*
  * The hydrostatic scalar of a tensor is computed as the sum of the diagonal
@@ -95,29 +116,40 @@ Real secondInvariant(const RankTwoTensor & r2tensor);
 Real thirdInvariant(const RankTwoTensor & r2tensor);
 
 /*
- * The max Principle method returns the largest principle value for a symmetric
+ * The max Principal method returns the largest principal value for a symmetric
  * tensor, using the calcEigenValues method.
+ * param r2tensor RankTwoTensor from which to extract the principal value
+ * param direction Direction corresponding to the principal value
  */
-Real maxPrinciple(const RankTwoTensor & r2tensor);
+Real maxPrincipal(const RankTwoTensor & r2tensor, Point & direction);
 
 /*
- * The mid Principle method calculates the second largest principle value for a
+ * The mid Principal method calculates the second largest principal value for a
  * tensor.  This method is valid only for 3D problems and will return an error
  * if called in 2D problems.
+ * param r2tensor RankTwoTensor from which to extract the principal value
+ * param direction Direction corresponding to the principal value
  */
-Real midPrinciple(const RankTwoTensor & r2tensor);
+Real midPrincipal(const RankTwoTensor & r2tensor, Point & direction);
 
 /*
- * The min Principle stress returns the smallest principle value from a symmetric
+ * The min Principal stress returns the smallest principal value from a symmetric
  * tensor.
+ * param r2tensor RankTwoTensor from which to extract the principal value
+ * param direction Direction corresponding to the principal value
  */
-Real minPrinciple(const RankTwoTensor & r2tensor);
+Real minPrincipal(const RankTwoTensor & r2tensor, Point & direction);
 
 /*
- * This method is called by the *Principle methods to calculate the eigenvalues
- * of a symmetric tensor and return the desired value based on vector position.
+ * This method is called by the *Principal methods to calculate the eigenvalues
+ * and eigenvectors of a symmetric tensor and return the desired value based on
+ * vector position.
+ * param r2tensor The RankTwoTensor from which to extract eigenvalues/vectors
+ * param index The index of the principal value
+ * param direction The eigenvector corresponding to the computed eigenvalue
  */
-Real calcEigenValues(const RankTwoTensor & r2tensor, unsigned int index);
+Real
+calcEigenValuesEigenVectors(const RankTwoTensor & r2tensor, unsigned int index, Point & eigenvec);
 
 /*
  * The axial stress is the scalar component of the stress tensor in an user-defined
@@ -127,7 +159,10 @@ Real calcEigenValues(const RankTwoTensor & r2tensor, unsigned int index);
  * @param point2 The end point of the rotation axis
  * @param direction The direction vector in which the scalar stress value is calculated.
  */
-Real axialStress(const RankTwoTensor & stress, const Point & point1, const Point & point2, Point & direction);
+Real axialStress(const RankTwoTensor & stress,
+                 const Point & point1,
+                 const Point & point2,
+                 Point & direction);
 
 /*
  * The hoop stress is calculated as
@@ -139,7 +174,11 @@ Real axialStress(const RankTwoTensor & stress, const Point & point1, const Point
  * @param curr_point The point corresponding to the stress (pass in & _q_point[_qp])
  * @param direction The direction vector in which the scalar stress value is calculated.
  */
-Real hoopStress(const RankTwoTensor & stress, const Point & point1, const Point & point2, const Point & curr_point, Point & direction);
+Real hoopStress(const RankTwoTensor & stress,
+                const Point & point1,
+                const Point & point2,
+                const Point & curr_point,
+                Point & direction);
 
 /* The radial stress is calculated as
  * radial_stress = normal^T_i * \sigma_{ij} * normal_j
@@ -150,7 +189,11 @@ Real hoopStress(const RankTwoTensor & stress, const Point & point1, const Point 
  * @param curr_point The point corresponding to the stress (pass in & _q_point[_qp])
  * @param direction The direction vector in which the scalar stress value is calculated.
 */
-Real radialStress(const RankTwoTensor & stress, const Point & point1, const Point & point2, const Point & curr_point, Point & direction);
+Real radialStress(const RankTwoTensor & stress,
+                  const Point & point1,
+                  const Point & point2,
+                  const Point & curr_point,
+                  Point & direction);
 
 /*
  * This method is a helper method for the hoopStress and radialStress methods to
@@ -161,7 +204,10 @@ Real radialStress(const RankTwoTensor & stress, const Point & point1, const Poin
  * @param curr_point The point corresponding to the stress (pass in & _q_point[_qp])
  * @param normalPosition The vector from the current point that is normal to the rotation axis
  */
-void normalPositionVector(const Point & point1, const Point & point2, const Point & curr_point, Point & normalPosition);
+void normalPositionVector(const Point & point1,
+                          const Point & point2,
+                          const Point & curr_point,
+                          Point & normalPosition);
 
 /*
  * This method calculates the scalar value of the supplied rank-2 tensor in the
@@ -175,4 +221,4 @@ Real directionValueTensor(const RankTwoTensor & r2tensor, Point & direction);
 Real triaxialityStress(const RankTwoTensor & stress);
 }
 
-#endif //RANKTWOSCALARTOOLS_H
+#endif // RANKTWOSCALARTOOLS_H

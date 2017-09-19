@@ -12,8 +12,8 @@
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
 
-#ifndef SETUPQUADRATUREACTION_H_
-#define SETUPQUADRATUREACTION_H_
+#ifndef SETUPQUADRATUREACTION_H
+#define SETUPQUADRATUREACTION_H
 
 #include "Action.h"
 // libMesh
@@ -22,7 +22,7 @@
 
 class SetupQuadratureAction;
 
-template<>
+template <>
 InputParameters validParams<SetupQuadratureAction>();
 
 /**
@@ -42,5 +42,4 @@ protected:
   Order _side_order;
 };
 
-
-#endif /* SETUPQUADRATUREACTION_H_ */
+#endif /* SETUPQUADRATUREACTION_H */

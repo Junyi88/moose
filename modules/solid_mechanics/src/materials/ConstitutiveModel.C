@@ -8,36 +8,40 @@
 #include "ConstitutiveModel.h"
 #include "Function.h"
 
-template<>
-InputParameters validParams<ConstitutiveModel>()
+template <>
+InputParameters
+validParams<ConstitutiveModel>()
 {
   InputParameters params = validParams<Material>();
 
-  // Sub-Newton Iteration control parameters
-  params.addParam<unsigned int>("max_its", 30, "Maximum number of sub-newton iterations");
-  params.addParam<bool>("output_iteration_info", false, "Set true to output sub-newton iteration information");
-  params.addParam<Real>("relative_tolerance", 1e-5, "Relative convergence tolerance for sub-newtion iteration");
-  params.addParam<Real>("absolute_tolerance", 1e-20, "Absolute convergence tolerance for sub-newtion iteration");
   params.addCoupledVar("temp", "Coupled Temperature");
 
   params.addParam<Real>("thermal_expansion", "The thermal expansion coefficient.");
-  params.addParam<FunctionName>("thermal_expansion_function", "Thermal expansion coefficient as a function of temperature.");
-  params.addParam<Real>("stress_free_temperature", "The stress-free temperature.  If not specified, the initial temperature is used.");
-  params.addParam<Real>("thermal_expansion_reference_temperature", "Reference temperature for mean thermal expansion function.");
+  params.addParam<FunctionName>("thermal_expansion_function",
+                                "Thermal expansion coefficient as a function of temperature.");
+  params.addParam<Real>(
+      "stress_free_temperature",
+      "The stress-free temperature.  If not specified, the initial temperature is used.");
+  params.addParam<Real>("thermal_expansion_reference_temperature",
+                        "Reference temperature for mean thermal expansion function.");
   MooseEnum cte_function_type("instantaneous mean");
-  params.addParam<MooseEnum>("thermal_expansion_function_type", cte_function_type, "Type of thermal expansion function.  Choices are: "+cte_function_type.getRawNames());
+  params.addParam<MooseEnum>("thermal_expansion_function_type",
+                             cte_function_type,
+                             "Type of thermal expansion function.  Choices are: " +
+                                 cte_function_type.getRawNames());
 
   return params;
 }
 
-
-ConstitutiveModel::ConstitutiveModel(const InputParameters & parameters) :
-    Material(parameters),
+ConstitutiveModel::ConstitutiveModel(const InputParameters & parameters)
+  : Material(parameters),
     _has_temp(isCoupled("temp")),
     _temperature(_has_temp ? coupledValue("temp") : _zero),
     _temperature_old(_has_temp ? coupledValueOld("temp") : _zero),
     _alpha(parameters.isParamValid("thermal_expansion") ? getParam<Real>("thermal_expansion") : 0.),
-    _alpha_function(parameters.isParamValid("thermal_expansion_function") ? &getFunction("thermal_expansion_function") : NULL),
+    _alpha_function(parameters.isParamValid("thermal_expansion_function")
+                        ? &getFunction("thermal_expansion_function")
+                        : NULL),
     _has_stress_free_temp(isParamValid("stress_free_temperature")),
     _stress_free_temp(_has_stress_free_temp ? getParam<Real>("stress_free_temperature") : 0.0),
     _ref_temp(0.0),
@@ -47,7 +51,8 @@ ConstitutiveModel::ConstitutiveModel(const InputParameters & parameters) :
   if (parameters.isParamValid("thermal_expansion_function_type"))
   {
     if (!_alpha_function)
-      mooseError("thermal_expansion_function_type can only be set when thermal_expansion_function is used");
+      mooseError("thermal_expansion_function_type can only be set when thermal_expansion_function "
+                 "is used");
     MooseEnum tec = getParam<MooseEnum>("thermal_expansion_function_type");
     if (tec == "mean")
       _mean_alpha_function = true;
@@ -62,20 +67,29 @@ ConstitutiveModel::ConstitutiveModel(const InputParameters & parameters) :
   if (parameters.isParamValid("thermal_expansion_reference_temperature"))
   {
     if (!_alpha_function)
-      mooseError("thermal_expansion_reference_temperature can only be set when thermal_expansion_function is used");
+      mooseError("thermal_expansion_reference_temperature can only be set when "
+                 "thermal_expansion_function is used");
     if (!_mean_alpha_function)
-      mooseError("thermal_expansion_reference_temperature can only be set when thermal_expansion_function_type = mean");
+      mooseError("thermal_expansion_reference_temperature can only be set when "
+                 "thermal_expansion_function_type = mean");
     _ref_temp = getParam<Real>("thermal_expansion_reference_temperature");
     if (!_has_temp)
-      mooseError("Cannot specify thermal_expansion_reference_temperature without coupling to temperature");
+      mooseError(
+          "Cannot specify thermal_expansion_reference_temperature without coupling to temperature");
   }
   else if (_mean_alpha_function)
-    mooseError("Must specify thermal_expansion_reference_temperature if thermal_expansion_function_type = mean");
+    mooseError("Must specify thermal_expansion_reference_temperature if "
+               "thermal_expansion_function_type = mean");
+}
+
+void
+ConstitutiveModel::setQp(unsigned int qp)
+{
+  _qp = qp;
 }
 
 void
 ConstitutiveModel::computeStress(const Elem & /*current_elem*/,
-                                 unsigned /*qp*/,
                                  const SymmElasticityTensor & elasticityTensor,
                                  const SymmTensor & stress_old,
                                  SymmTensor & strain_increment,
@@ -85,15 +99,8 @@ ConstitutiveModel::computeStress(const Elem & /*current_elem*/,
   stress_new += stress_old;
 }
 
-void
-ConstitutiveModel::initStatefulProperties(unsigned int /*n_points*/)
-{
-}
-
 bool
-ConstitutiveModel::applyThermalStrain(unsigned qp,
-                                      SymmTensor & strain_increment,
-                                      SymmTensor & d_strain_dT)
+ConstitutiveModel::applyThermalStrain(SymmTensor & strain_increment, SymmTensor & d_strain_dT)
 {
   if (_t_step >= 1)
     _step_zero_cm = false;
@@ -110,9 +117,9 @@ ConstitutiveModel::applyThermalStrain(unsigned qp,
     if (_step_one_cm && _has_stress_free_temp)
       old_temp = _stress_free_temp;
     else
-      old_temp = _temperature_old[qp];
+      old_temp = _temperature_old[_qp];
 
-    Real current_temp = _temperature[qp];
+    Real current_temp = _temperature[_qp];
 
     Real delta_t = current_temp - old_temp;
 
@@ -121,15 +128,17 @@ ConstitutiveModel::applyThermalStrain(unsigned qp,
     if (_alpha_function)
     {
       Point p;
-      Real alpha_current_temp = _alpha_function->value(current_temp,p);
-      Real alpha_old_temp = _alpha_function->value(old_temp,p);
+      Real alpha_current_temp = _alpha_function->value(current_temp, p);
+      Real alpha_old_temp = _alpha_function->value(old_temp, p);
+      Real alpha_stress_free_temperature = _alpha_function->value(_stress_free_temp, p);
 
       if (_mean_alpha_function)
       {
         Real small(1e-6);
 
-        Real numerator = alpha_current_temp * (current_temp - _ref_temp) - alpha_old_temp * (old_temp - _ref_temp);
-        Real denominator = 1.0 + alpha_old_temp * (old_temp - _ref_temp);
+        Real numerator = alpha_current_temp * (current_temp - _ref_temp) -
+                         alpha_old_temp * (old_temp - _ref_temp);
+        Real denominator = 1.0 + alpha_stress_free_temperature * (_stress_free_temp - _ref_temp);
         if (denominator < small)
           mooseError("Denominator too small in thermal strain calculation");
         inc_thermal_strain = numerator / denominator;

@@ -12,7 +12,7 @@
 
 class ALEKernel;
 
-template<>
+template <>
 InputParameters validParams<ALEKernel>();
 
 class ALEKernel : public Kernel
@@ -20,10 +20,10 @@ class ALEKernel : public Kernel
 public:
   ALEKernel(const InputParameters & parameters);
 
-protected:
   virtual void computeJacobian();
   virtual void computeOffDiagJacobian(unsigned int jvar);
 
+protected:
   /// undisplaced problem
   Assembly & _assembly_undisplaced;
 
@@ -36,4 +36,4 @@ protected:
   ///@}
 };
 
-#endif //ALEKERNEL_H
+#endif // ALEKERNEL_H

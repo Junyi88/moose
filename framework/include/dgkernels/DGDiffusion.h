@@ -17,10 +17,10 @@
 
 #include "DGKernel.h"
 
-//Forward Declarations
+// Forward Declarations
 class DGDiffusion;
 
-template<>
+template <>
 InputParameters validParams<DGDiffusion>();
 
 /**
@@ -44,7 +44,8 @@ protected:
 
   Real _epsilon;
   Real _sigma;
-  Real _coefficient;
+  const MaterialProperty<Real> & _diff;
+  const MaterialProperty<Real> & _diff_neighbor;
 };
 
 #endif

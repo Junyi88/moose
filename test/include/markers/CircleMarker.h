@@ -17,12 +17,11 @@
 
 #include "Marker.h"
 
-// libmesh includes
 #include "libmesh/mesh_tools.h"
 
 class CircleMarker;
 
-template<>
+template <>
 InputParameters validParams<CircleMarker>();
 
 class CircleMarker : public Marker

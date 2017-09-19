@@ -28,6 +28,8 @@
     type = 'RunApp'
     input = 'IGNORED'
     absent_out = '/Executioner/\<type\>/Transient.*/Executioner/\<type\>/Transient'
+    # suppress error checking, the word 'ERROR' shows up in the yaml dump
+    errors = 'zzzzz zzzzz'
     cli_args = '--yaml /Executioner'
   [../]
 
@@ -103,5 +105,74 @@
     type = 'CheckFiles'
     input = 'output_test_xdr.i'
     check_files = 'output_test_xdr_out_0001.xdr output_test_xdr_out_0001_mesh.xdr'
+  [../]
+
+  [./json]
+    type = 'PythonUnitTest'
+    input = 'test_json.py'
+    queue_scheduler = false
+  [../]
+
+  [./definition_existsin_test]
+    type = 'RunApp'
+    input = 'IGNORED'
+    expect_out = 'ExistsIn=\[\s*?EXTRA:"all"\s*?EXTRA:"none"\s*?"../../../../../Outputs/["*"]/decl"\s*?\]'
+    cli_args = '--definition'
+  [../]
+
+  [./definition_childatleastone_test]
+    type = 'RunApp'
+    input = 'IGNORED'
+    expect_out = 'ChildAtLeastOne=\[\s*?"../../../GlobalParams/inside/value"\s*?"inside/value"\s*?\]'
+    cli_args = '--definition'
+  [../]
+
+  [./definition_valenum_test]
+    type = 'RunApp'
+    input = 'IGNORED'
+    expect_out = '\'execute_on\'{.*?\'value\'{.*?ValEnums=\[ "none" "ini.*?gin" "custom" \].*}?.*?} % end parameter execute_on'
+    cli_args = '--definition'
+  [../]
+
+  [./definition_active_parameter_test]
+    type = 'RunApp'
+    input = 'IGNORED'
+    expect_out = '\'active\'{.*?Description="If specified.*?made active".*?\'value\'{.*?InputDefault="__all__".*?} % end parameter active'
+    cli_args = '--definition'
+  [../]
+
+  [./definition_normal_sub_test]
+    type = 'RunApp'
+    input = 'IGNORED'
+    expect_out = '\'Indicators\'{.*?InputTmpl=MooseBlock.*?InputName="Indicators".*?InputType=normal_sub.*?InputDefault="Indicators"'
+    cli_args = '--definition'
+  [../]
+
+  [./definition_type_sub_test]
+    type = 'RunApp'
+    input = 'IGNORED'
+    expect_out = '\'CircleMarker_type\'{.*?InputType=type_sub.*?InputDefault="insert_name_here".*?} % end block CircleMarker_type'
+    cli_args = '--definition'
+  [../]
+
+  [./definition_default_type_test]
+    type = 'RunApp'
+    input = 'IGNORED'
+    expect_out = '\'BoxMarker_type\'{.*?\'type\'{.*?\'value\'{.*?InputDefault="BoxMarker".*?}.*?} % end parameter type.*?} % end block BoxMarker_type'
+    cli_args = '--definition'
+  [../]
+
+  [./definition_minvalinc_inputdefault_test]
+    type = 'RunApp'
+    input = 'IGNORED'
+    expect_out = '\'cycles_per_step\'{.*?'value'{.*?MinValInc=0.*?InputDefault="1".*?} % end parameter cycles_per_step'
+    cli_args = '--definition'
+  [../]
+
+  [./definition_expressions_are_okay_test]
+    type = 'RunApp'
+    input = 'IGNORED'
+    expect_out = '\'function\'{.*\'value\'{.*ExistsIn=\[\s*EXTRA:"ExpressionsAreOkay"\s*"../../../../../Functions/["*"]/decl"\s*\].*}.*} % end parameter function'
+    cli_args = '--definition'
   [../]
 []

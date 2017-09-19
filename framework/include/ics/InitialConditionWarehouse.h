@@ -35,15 +35,19 @@ public:
   /**
    * Add object to the warehouse.
    */
-  void addObject(MooseSharedPointer<InitialCondition> object, THREAD_ID tid);
+  void addObject(std::shared_ptr<InitialCondition> object, THREAD_ID tid);
 
+  /**
+   * Get a list of dependent UserObjects for this exec type
+   * @return a set of dependent user objects
+   */
+  std::set<std::string> getDependObjects() const;
 
 protected:
-
   ///@{
   /// Variable name to block/boundary IDs for error checking
-  std::vector<std::map<std::string, std::set<BoundaryID> > > _boundary_ics;
-  std::vector<std::map<std::string, std::set<SubdomainID> > > _block_ics;
+  std::vector<std::map<std::string, std::set<BoundaryID>>> _boundary_ics;
+  std::vector<std::map<std::string, std::set<SubdomainID>>> _block_ics;
   ///@}
 };
 

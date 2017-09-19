@@ -16,14 +16,24 @@
 #define LAYEREDBASE_H
 
 // MOOSE includes
-#include "InputParameters.h"
+#include "Moose.h"
+#include "MooseEnum.h"
 
 // Forward Declarations
+class InputParameters;
 class LayeredBase;
-class UserObject;
 class SubProblem;
+class UserObject;
 
-template<>
+namespace libMesh
+{
+class Point;
+}
+
+template <typename T>
+InputParameters validParams();
+
+template <>
 InputParameters validParams<LayeredBase>();
 
 /**

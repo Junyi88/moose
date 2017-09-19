@@ -16,7 +16,8 @@
 #define THREADEDELEMENTLOOP_H
 
 #include "ParallelUniqueId.h"
-#include "FEProblem.h"
+#include "FEProblemBase.h"
+#include "Assembly.h"
 #include "ThreadedElementLoopBase.h"
 
 // Forward declarations
@@ -34,11 +35,11 @@ static Threads::spin_mutex threaded_element_mutex;
 /**
  * Base class for assembly-like calculations.
  */
-template<typename RangeType>
+template <typename RangeType>
 class ThreadedElementLoop : public ThreadedElementLoopBase<RangeType>
 {
 public:
-  ThreadedElementLoop(FEProblem & feproblem, SystemBase & system);
+  ThreadedElementLoop(FEProblemBase & feproblem);
 
   ThreadedElementLoop(ThreadedElementLoop & x, Threads::split split);
 
@@ -47,34 +48,36 @@ public:
   virtual void caughtMooseException(MooseException & e) override;
 
   virtual bool keepGoing() override { return !_fe_problem.hasException(); }
+
+  virtual void preElement(const Elem * elem) override;
+
+  virtual void preInternalSide(const Elem * elem, unsigned int side) override;
+
+  virtual void neighborSubdomainChanged() override;
+
 protected:
-  SystemBase & _system;
-  FEProblem & _fe_problem;
+  FEProblemBase & _fe_problem;
 };
 
-
-template<typename RangeType>
-ThreadedElementLoop<RangeType>::ThreadedElementLoop(FEProblem & fe_problem, SystemBase & system) :
-    ThreadedElementLoopBase<RangeType>(system.mesh()),
-    _system(system),
-    _fe_problem(fe_problem)
+template <typename RangeType>
+ThreadedElementLoop<RangeType>::ThreadedElementLoop(FEProblemBase & fe_problem)
+  : ThreadedElementLoopBase<RangeType>(fe_problem.mesh()), _fe_problem(fe_problem)
 {
 }
 
-template<typename RangeType>
-ThreadedElementLoop<RangeType>::ThreadedElementLoop(ThreadedElementLoop & x, Threads::split /*split*/) :
-    ThreadedElementLoopBase<RangeType>(x),
-    _system(x._system),
-    _fe_problem(x._fe_problem)
+template <typename RangeType>
+ThreadedElementLoop<RangeType>::ThreadedElementLoop(ThreadedElementLoop & x,
+                                                    Threads::split /*split*/)
+  : ThreadedElementLoopBase<RangeType>(x), _fe_problem(x._fe_problem)
 {
 }
 
-template<typename RangeType>
+template <typename RangeType>
 ThreadedElementLoop<RangeType>::~ThreadedElementLoop()
 {
 }
 
-template<typename RangeType>
+template <typename RangeType>
 void
 ThreadedElementLoop<RangeType>::caughtMooseException(MooseException & e)
 {
@@ -84,5 +87,26 @@ ThreadedElementLoop<RangeType>::caughtMooseException(MooseException & e)
   _fe_problem.setException(what);
 }
 
+template <typename RangeType>
+void
+ThreadedElementLoop<RangeType>::preElement(const Elem * el)
+{
+  _fe_problem.setCurrentSubdomainID(el, ThreadedElementLoopBase<RangeType>::_tid);
+}
 
-#endif //THREADEDELEMENTLOOP_H
+template <typename RangeType>
+void
+ThreadedElementLoop<RangeType>::preInternalSide(const Elem * el, unsigned int side)
+{
+  _fe_problem.setNeighborSubdomainID(el, side, ThreadedElementLoopBase<RangeType>::_tid);
+}
+
+template <typename RangeType>
+void
+ThreadedElementLoop<RangeType>::neighborSubdomainChanged()
+{
+  _fe_problem.neighborSubdomainSetup(ThreadedElementLoopBase<RangeType>::_neighbor_subdomain,
+                                     ThreadedElementLoopBase<RangeType>::_tid);
+}
+
+#endif // THREADEDELEMENTLOOP_H

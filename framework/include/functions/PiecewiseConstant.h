@@ -17,6 +17,16 @@
 
 #include "Piecewise.h"
 
+// Forward declarations
+class PiecewiseConstant;
+
+template <>
+InputParameters validParams<PiecewiseConstant>();
+
+/**
+ * Function which provides a piecewise continuous constant interpolation
+ * of a provided (x,y) point data set.
+ */
 class PiecewiseConstant : public Piecewise
 {
 public:
@@ -43,17 +53,15 @@ public:
   virtual Real average() override;
 
 private:
-  enum DirectionEnum {
+  enum DirectionEnum
+  {
     LEFT = 0,
     RIGHT,
     UNDEFINED
   };
-  DirectionEnum getDirection( const std::string & direction );
+  DirectionEnum getDirection(const std::string & direction);
 
   const DirectionEnum _direction;
 };
-
-template<>
-InputParameters validParams<PiecewiseConstant>();
 
 #endif

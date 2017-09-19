@@ -17,15 +17,23 @@
 #include "FEProblem.h"
 #include "MooseApp.h"
 
-template<>
-InputParameters validParams<CSV>()
+template <>
+InputParameters
+validParams<CSV>()
 {
   // Get the parameters from the parent object
   InputParameters params = validParams<TableOutput>();
 
+  params.addParam<bool>("sort_columns", false, "Toggle the sorting of columns alphabetically.");
+
   // Options for aligning csv output with whitespace padding
-  params.addParam<bool>("align", false, "Align the outputted csv data by padding the numbers with trailing whitespace");
-  params.addParam<std::string>("delimiter", "Assign the delimiter (default is ','"); // default not included because peacock didn't parse ','
+  params.addParam<bool>(
+      "align",
+      false,
+      "Align the outputted csv data by padding the numbers with trailing whitespace");
+  params.addParam<std::string>(
+      "delimiter", "Assign the delimiter (default is ','"); // default not included because peacock
+                                                            // didn't parse ','
   params.addParam<unsigned int>("precision", 14, "Set the output precision");
 
   // Suppress unused parameters
@@ -35,14 +43,15 @@ InputParameters validParams<CSV>()
   return params;
 }
 
-CSV::CSV(const InputParameters & parameters) :
-    TableOutput(parameters),
+CSV::CSV(const InputParameters & parameters)
+  : TableOutput(parameters),
     _align(getParam<bool>("align")),
     _precision(getParam<unsigned int>("precision")),
     _set_delimiter(isParamValid("delimiter")),
     _delimiter(_set_delimiter ? getParam<std::string>("delimiter") : ""),
     _write_all_table(false),
-    _write_vector_table(false)
+    _write_vector_table(false),
+    _sort_columns(getParam<bool>("sort_columns"))
 {
 }
 
@@ -98,19 +107,27 @@ CSV::output(const ExecFlagType & type)
 
   // Print the table containing all the data to a file
   if (_write_all_table && !_all_data_table.empty() && processor_id() == 0)
+  {
+    if (_sort_columns)
+      _all_data_table.sortColumns();
     _all_data_table.printCSV(filename(), 1, _align);
+  }
 
   // Output each VectorPostprocessor's data to a file
-  if (_write_vector_table)
+  if (_write_vector_table && processor_id() == 0)
+  {
     for (auto & it : _vector_postprocessor_tables)
     {
       std::ostringstream output;
       output << _file_base << "_" << MooseUtils::shortName(it.first);
-      output << "_" << std::setw(_padding) << std::setprecision(0) << std::setfill('0') << std::right << timeStep() << ".csv";
+      output << "_" << std::setw(_padding) << std::setprecision(0) << std::setfill('0')
+             << std::right << timeStep() << ".csv";
 
       if (_set_delimiter)
         it.second.setDelimiter(_delimiter);
       it.second.setPrecision(_precision);
+      if (_sort_columns)
+        it.second.sortColumns();
       it.second.printCSV(output.str(), 1, _align);
 
       if (_time_data)
@@ -120,6 +137,7 @@ CSV::output(const ExecFlagType & type)
         _vector_postprocessor_time_tables[it.first].printCSV(filename.str());
       }
     }
+  }
 
   // Re-set write flags
   _write_all_table = false;

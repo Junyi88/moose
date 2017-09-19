@@ -50,6 +50,8 @@
   solve_type = 'PJFNK'
   petsc_options_iname = '-pc_type -pc_hypre_type'
   petsc_options_value = 'hypre boomeramg'
+
+  nl_rel_tol = 1e-12
 []
 
 [Outputs]
@@ -79,7 +81,7 @@
 [Controls]
   [./transfers]
     type = TimePeriod
-    enable_objects = pp_transfer
+    enable_objects = Transfer::pp_transfer
     start_time = 2
     execute_on = 'initial timestep_begin'
   [../]

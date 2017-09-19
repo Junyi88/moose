@@ -17,10 +17,10 @@
 
 #include "GeneralPostprocessor.h"
 
-//Forward Declarations
+// Forward Declarations
 class PerformanceData;
 
-template<>
+template <>
 InputParameters validParams<PerformanceData>();
 
 class PerformanceData : public GeneralPostprocessor
@@ -50,8 +50,8 @@ public:
 protected:
   PerfLogCols _column;
 
-  std::string _category;
-  std::string _event;
+  MooseEnum _category;
+  MooseEnum _event;
 };
 
 #endif // PERFORMANCEDATA_H

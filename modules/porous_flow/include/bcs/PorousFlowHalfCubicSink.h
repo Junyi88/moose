@@ -5,32 +5,31 @@
 /*             See LICENSE for full restrictions                */
 /****************************************************************/
 
-
 #ifndef POROUSFLOWHALFCUBICSINK_H
 #define POROUSFLOWHALFCUBICSINK_H
 
-#include "PorousFlowSink.h"
+#include "PorousFlowSinkPTDefiner.h"
 
 // Forward Declarations
 class PorousFlowHalfCubicSink;
 
-template<>
+template <>
 InputParameters validParams<PorousFlowHalfCubicSink>();
 
 /**
  * Applies a flux sink to a boundary.  The base flux
  * defined by PorousFlowSink is multiplied by a cubic.
- * Denote x = porepressure - center.  Then
+ * Denote x = porepressure - center, or in the case of
+ * heat fluxes with no fluid, x = temperature - center.  Then
  * Then Flux out = (max/cutoff^3)*(2x + cutoff)(x - cutoff)^2 for cutoff < x < 0.
  * Flux out = max for x >= 0.
  * Flux out = 0 for x <= cutoff.
  * This is typically used for modelling evapotranspiration
  * from the top of a groundwater model
  */
-class PorousFlowHalfCubicSink : public PorousFlowSink
+class PorousFlowHalfCubicSink : public PorousFlowSinkPTDefiner
 {
 public:
-
   PorousFlowHalfCubicSink(const InputParameters & parameters);
 
 protected:
@@ -43,15 +42,9 @@ protected:
   /// center of the cubic sink
   const Real _center;
 
-  /// Nodal pore pressure in each phase
-  const MaterialProperty<std::vector<Real> > & _pp;
+  virtual Real multiplier() const override;
 
-  /// d(Nodal pore pressure in each phase)/d(PorousFlow variable)
-  const MaterialProperty<std::vector<std::vector<Real> > > & _dpp_dvar;
-
-  virtual Real multiplier();
-
-  virtual Real dmultiplier_dvar(unsigned int pvar);
+  virtual Real dmultiplier_dvar(unsigned int pvar) const override;
 };
 
-#endif //POROUSFLOWHALFCUBICSINK_H
+#endif // POROUSFLOWHALFCUBICSINK_H

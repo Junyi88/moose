@@ -72,8 +72,12 @@
 
 // Kernels
 #include "INSMass.h"
+#include "INSMassRZ.h"
 #include "INSMomentumTimeDerivative.h"
-#include "INSMomentum.h"
+#include "INSMomentumTractionForm.h"
+#include "INSMomentumTractionFormRZ.h"
+#include "INSMomentumLaplaceForm.h"
+#include "INSMomentumLaplaceFormRZ.h"
 #include "INSTemperatureTimeDerivative.h"
 #include "INSTemperature.h"
 #include "INSSplitMomentum.h"
@@ -85,7 +89,8 @@
 #include "INSCompressibilityPenalty.h"
 
 // BCs
-#include "INSMomentumNoBCBC.h"
+#include "INSMomentumNoBCBCTractionForm.h"
+#include "INSMomentumNoBCBCLaplaceForm.h"
 #include "INSTemperatureNoBCBC.h"
 #include "ImplicitNeumannBC.h"
 
@@ -99,41 +104,93 @@
 // Postprocessors
 #include "INSExplicitTimestepSelector.h"
 
-template<>
-InputParameters validParams<NavierStokesApp>()
+// Functions
+#include "WedgeFunction.h"
+
+// CNSFV (Compressible Navier-Stokes by Finite Volume)
+#include "CNSFVMachIC.h"
+#include "CNSFVPressureIC.h"
+
+#include "CNSFVNoSlopeReconstruction.h"
+#include "CNSFVGreenGaussSlopeReconstruction.h"
+#include "CNSFVLeastSquaresSlopeReconstruction.h"
+#include "CNSFVSlopeReconstructionOneD.h"
+#include "CNSFVNoSlopeLimiting.h"
+#include "CNSFVMinmaxSlopeLimiting.h"
+#include "CNSFVWENOSlopeLimiting.h"
+#include "CNSFVSlopeLimitingOneD.h"
+#include "CNSFVHLLCInternalSideFlux.h"
+#include "CNSFVFreeInflowBoundaryFlux.h"
+#include "CNSFVFreeOutflowBoundaryFlux.h"
+#include "CNSFVRiemannInvariantBoundaryFlux.h"
+#include "CNSFVHLLCInflowOutflowBoundaryFlux.h"
+#include "CNSFVHLLCSlipBoundaryFlux.h"
+#include "CNSFVFreeInflowBCUserObject.h"
+#include "CNSFVFreeOutflowBCUserObject.h"
+#include "CNSFVCharacteristicBCUserObject.h"
+#include "CNSFVRiemannInvariantBCUserObject.h"
+#include "CNSFVSlipBCUserObject.h"
+
+#include "CNSFVBC.h"
+
+#include "CNSFVKernel.h"
+
+#include "CNSFVMaterial.h"
+
+#include "CNSFVEntropyProductionAux.h"
+#include "CNSFVMachAux.h"
+#include "CNSFVPressureAux.h"
+#include "CNSFVSpecificTotalEnthalpyAux.h"
+
+#include "CNSFVIdealGasEntropyL2Error.h"
+#include "CNSFVIdealGasTotalEnthalpyL2Error.h"
+#include "CNSFVTimeStepLimit.h"
+
+template <>
+InputParameters
+validParams<NavierStokesApp>()
 {
   InputParameters params = validParams<MooseApp>();
-  params.set<bool>("use_legacy_uo_initialization") = false;
-  params.set<bool>("use_legacy_uo_aux_computation") = false;
   return params;
 }
 
-NavierStokesApp::NavierStokesApp(InputParameters parameters) :
-    MooseApp(parameters)
+NavierStokesApp::NavierStokesApp(InputParameters parameters) : MooseApp(parameters)
 {
   Moose::registerObjects(_factory);
-  FluidPropertiesApp::registerObjects(_factory);
+  NavierStokesApp::registerObjectDepends(_factory);
   NavierStokesApp::registerObjects(_factory);
 
   Moose::associateSyntax(_syntax, _action_factory);
-  FluidPropertiesApp::associateSyntax(_syntax, _action_factory);
+  NavierStokesApp::associateSyntaxDepends(_syntax, _action_factory);
   NavierStokesApp::associateSyntax(_syntax, _action_factory);
 }
 
-NavierStokesApp::~NavierStokesApp()
-{
-}
+NavierStokesApp::~NavierStokesApp() {}
 
 // External entry point for dynamic application loading
-extern "C" void NavierStokesApp__registerApps() { NavierStokesApp::registerApps(); }
+extern "C" void
+NavierStokesApp__registerApps()
+{
+  NavierStokesApp::registerApps();
+}
 void
 NavierStokesApp::registerApps()
 {
   registerApp(NavierStokesApp);
 }
 
+void
+NavierStokesApp::registerObjectDepends(Factory & factory)
+{
+  FluidPropertiesApp::registerObjects(factory);
+}
+
 // External entry point for dynamic object registration
-extern "C" void NavierStokesApp__registerObjects(Factory & factory) { NavierStokesApp::registerObjects(factory); }
+extern "C" void
+NavierStokesApp__registerObjects(Factory & factory)
+{
+  NavierStokesApp::registerObjects(factory);
+}
 void
 NavierStokesApp::registerObjects(Factory & factory)
 {
@@ -194,8 +251,12 @@ NavierStokesApp::registerObjects(Factory & factory)
 
   // Kernels
   registerKernel(INSMass);
+  registerKernel(INSMassRZ);
   registerKernel(INSMomentumTimeDerivative);
-  registerKernel(INSMomentum);
+  registerKernel(INSMomentumTractionForm);
+  registerKernel(INSMomentumTractionFormRZ);
+  registerKernel(INSMomentumLaplaceForm);
+  registerKernel(INSMomentumLaplaceFormRZ);
   registerKernel(INSTemperatureTimeDerivative);
   registerKernel(INSTemperature);
   registerKernel(INSSplitMomentum);
@@ -207,7 +268,8 @@ NavierStokesApp::registerObjects(Factory & factory)
   registerKernel(INSCompressibilityPenalty);
 
   // BCs
-  registerBoundaryCondition(INSMomentumNoBCBC);
+  registerBoundaryCondition(INSMomentumNoBCBCTractionForm);
+  registerBoundaryCondition(INSMomentumNoBCBCLaplaceForm);
   registerBoundaryCondition(INSTemperatureNoBCBC);
   registerBoundaryCondition(ImplicitNeumannBC);
 
@@ -220,22 +282,74 @@ NavierStokesApp::registerObjects(Factory & factory)
 
   // Materials
   registerMaterial(Air);
+
+  // Functions
+  registerFunction(WedgeFunction);
+
+  // CNSFV
+  registerInitialCondition(CNSFVMachIC);
+  registerInitialCondition(CNSFVPressureIC);
+
+  registerUserObject(CNSFVNoSlopeReconstruction);
+  registerUserObject(CNSFVGreenGaussSlopeReconstruction);
+  registerUserObject(CNSFVLeastSquaresSlopeReconstruction);
+  registerUserObject(CNSFVSlopeReconstructionOneD);
+  registerUserObject(CNSFVNoSlopeLimiting);
+  registerUserObject(CNSFVMinmaxSlopeLimiting);
+  registerUserObject(CNSFVWENOSlopeLimiting);
+  registerUserObject(CNSFVSlopeLimitingOneD);
+  registerUserObject(CNSFVHLLCInternalSideFlux);
+  registerUserObject(CNSFVFreeInflowBoundaryFlux);
+  registerUserObject(CNSFVFreeOutflowBoundaryFlux);
+  registerUserObject(CNSFVRiemannInvariantBoundaryFlux);
+  registerUserObject(CNSFVHLLCInflowOutflowBoundaryFlux);
+  registerUserObject(CNSFVHLLCSlipBoundaryFlux);
+  registerUserObject(CNSFVFreeInflowBCUserObject);
+  registerUserObject(CNSFVFreeOutflowBCUserObject);
+  registerUserObject(CNSFVCharacteristicBCUserObject);
+  registerUserObject(CNSFVRiemannInvariantBCUserObject);
+  registerUserObject(CNSFVSlipBCUserObject);
+
+  registerBoundaryCondition(CNSFVBC);
+
+  registerKernel(CNSFVKernel);
+
+  registerMaterial(CNSFVMaterial);
+
+  registerAux(CNSFVEntropyProductionAux);
+  registerAux(CNSFVMachAux);
+  registerAux(CNSFVPressureAux);
+  registerAux(CNSFVSpecificTotalEnthalpyAux);
+
+  registerPostprocessor(CNSFVIdealGasEntropyL2Error);
+  registerPostprocessor(CNSFVIdealGasTotalEnthalpyL2Error);
+  registerPostprocessor(CNSFVTimeStepLimit);
+}
+
+void
+NavierStokesApp::associateSyntaxDepends(Syntax & syntax, ActionFactory & action_factory)
+{
+  FluidPropertiesApp::associateSyntax(syntax, action_factory);
 }
 
 // External entry point for dynamic syntax association
-extern "C" void NavierStokesApp__associateSyntax(Syntax & syntax, ActionFactory & action_factory) { NavierStokesApp::associateSyntax(syntax, action_factory); }
-
+extern "C" void
+NavierStokesApp__associateSyntax(Syntax & syntax, ActionFactory & action_factory)
+{
+  NavierStokesApp::associateSyntax(syntax, action_factory);
+}
 void
 NavierStokesApp::associateSyntax(Syntax & syntax, ActionFactory & action_factory)
 {
 #undef registerAction
-#define registerAction(type, action) action_factory.reg<type>(stringifyName(type), action)
+#define registerAction(type, action)                                                               \
+  action_factory.reg<type>(stringifyName(type), action, __FILE__, __LINE__)
 
   // Create the syntax
-  syntax.registerActionSyntax("AddNavierStokesVariablesAction", "Modules/NavierStokes/Variables");
-  syntax.registerActionSyntax("AddNavierStokesICsAction", "Modules/NavierStokes/ICs");
-  syntax.registerActionSyntax("AddNavierStokesKernelsAction", "Modules/NavierStokes/Kernels");
-  syntax.registerActionSyntax("AddNavierStokesBCsAction", "Modules/NavierStokes/BCs/*");
+  registerSyntax("AddNavierStokesVariablesAction", "Modules/NavierStokes/Variables");
+  registerSyntax("AddNavierStokesICsAction", "Modules/NavierStokes/ICs");
+  registerSyntax("AddNavierStokesKernelsAction", "Modules/NavierStokes/Kernels");
+  registerSyntax("AddNavierStokesBCsAction", "Modules/NavierStokes/BCs/*");
 
   // add variables action
   registerTask("add_navier_stokes_variables", /*is_required=*/false);
@@ -254,8 +368,8 @@ NavierStokesApp::associateSyntax(Syntax & syntax, ActionFactory & action_factory
 
   // add BCs actions
   registerMooseObjectTask("add_navier_stokes_bcs", NSWeakStagnationInletBC, /*is_required=*/false);
-  appendMooseObjectTask  ("add_navier_stokes_bcs", NSNoPenetrationBC);
-  appendMooseObjectTask  ("add_navier_stokes_bcs", NSStaticPressureOutletBC);
+  appendMooseObjectTask("add_navier_stokes_bcs", NSNoPenetrationBC);
+  appendMooseObjectTask("add_navier_stokes_bcs", NSStaticPressureOutletBC);
   addTaskDependency("add_navier_stokes_bcs", "add_bc");
   registerAction(AddNavierStokesBCsAction, "add_navier_stokes_bcs");
 

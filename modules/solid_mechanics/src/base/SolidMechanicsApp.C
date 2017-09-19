@@ -55,42 +55,51 @@
 #include "RateDepSmearCrackModel.h"
 #include "RateDepSmearIsoCrackModel.h"
 
-
-template<>
-InputParameters validParams<SolidMechanicsApp>()
+template <>
+InputParameters
+validParams<SolidMechanicsApp>()
 {
   InputParameters params = validParams<MooseApp>();
-  params.set<bool>("use_legacy_uo_initialization") = false;
-  params.set<bool>("use_legacy_uo_aux_computation") = false;
   return params;
 }
 
-SolidMechanicsApp::SolidMechanicsApp(const InputParameters & parameters) :
-    MooseApp(parameters)
+SolidMechanicsApp::SolidMechanicsApp(const InputParameters & parameters) : MooseApp(parameters)
 {
   Moose::registerObjects(_factory);
-  TensorMechanicsApp::registerObjects(_factory);
+  SolidMechanicsApp::registerObjectDepends(_factory);
   SolidMechanicsApp::registerObjects(_factory);
 
   Moose::associateSyntax(_syntax, _action_factory);
-  TensorMechanicsApp::associateSyntax(_syntax, _action_factory);
+  SolidMechanicsApp::associateSyntaxDepends(_syntax, _action_factory);
   SolidMechanicsApp::associateSyntax(_syntax, _action_factory);
 }
 
-SolidMechanicsApp::~SolidMechanicsApp()
-{
-}
+SolidMechanicsApp::~SolidMechanicsApp() {}
 
 // External entry point for dynamic application loading
-extern "C" void SolidMechanicsApp__registerApps() { SolidMechanicsApp::registerApps(); }
+extern "C" void
+SolidMechanicsApp__registerApps()
+{
+  SolidMechanicsApp::registerApps();
+}
 void
 SolidMechanicsApp::registerApps()
 {
   registerApp(SolidMechanicsApp);
 }
 
+void
+SolidMechanicsApp::registerObjectDepends(Factory & factory)
+{
+  TensorMechanicsApp::registerObjects(factory);
+}
+
 // External entry point for dynamic object registration
-extern "C" void SolidMechanicsApp__registerObjects(Factory & factory) { SolidMechanicsApp::registerObjects(factory); }
+extern "C" void
+SolidMechanicsApp__registerObjects(Factory & factory)
+{
+  TensorMechanicsApp::registerObjects(factory);
+}
 void
 SolidMechanicsApp::registerObjects(Factory & factory)
 {
@@ -144,19 +153,29 @@ SolidMechanicsApp::registerObjects(Factory & factory)
   registerUserObject(CrackFrontDefinition);
 }
 
+void
+SolidMechanicsApp::associateSyntaxDepends(Syntax & syntax, ActionFactory & action_factory)
+{
+  TensorMechanicsApp::associateSyntax(syntax, action_factory);
+}
+
 // External entry point for dynamic syntax association
-extern "C" void SolidMechanicsApp__associateSyntax(Syntax & syntax, ActionFactory & action_factory) { SolidMechanicsApp::associateSyntax(syntax, action_factory); }
+extern "C" void
+SolidMechanicsApp__associateSyntax(Syntax & syntax, ActionFactory & action_factory)
+{
+  SolidMechanicsApp::associateSyntax(syntax, action_factory);
+}
 void
 SolidMechanicsApp::associateSyntax(Syntax & syntax, ActionFactory & action_factory)
 {
-  syntax.registerActionSyntax("SolidMechanicsAction", "SolidMechanics/*");
+  registerSyntax("SolidMechanicsAction", "SolidMechanics/*");
 
-  syntax.registerActionSyntax("DomainIntegralAction", "DomainIntegral","add_user_object");
-  syntax.registerActionSyntax("DomainIntegralAction", "DomainIntegral","add_aux_variable");
-  syntax.registerActionSyntax("DomainIntegralAction", "DomainIntegral","add_aux_kernel");
-  syntax.registerActionSyntax("DomainIntegralAction", "DomainIntegral","add_postprocessor");
-  syntax.registerActionSyntax("DomainIntegralAction", "DomainIntegral","add_vector_postprocessor");
-  syntax.registerActionSyntax("DomainIntegralAction", "DomainIntegral","add_material");
+  registerSyntaxTask("DomainIntegralAction", "DomainIntegral", "add_user_object");
+  registerSyntaxTask("DomainIntegralAction", "DomainIntegral", "add_aux_variable");
+  registerSyntaxTask("DomainIntegralAction", "DomainIntegral", "add_aux_kernel");
+  registerSyntaxTask("DomainIntegralAction", "DomainIntegral", "add_postprocessor");
+  registerSyntaxTask("DomainIntegralAction", "DomainIntegral", "add_vector_postprocessor");
+  registerSyntaxTask("DomainIntegralAction", "DomainIntegral", "add_material");
 
   registerAction(SolidMechanicsAction, "add_kernel");
   registerAction(DomainIntegralAction, "add_user_object");

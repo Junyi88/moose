@@ -12,8 +12,7 @@
 /**
  * Generic gap heat transfer model, with h_gap =  h_conduction + h_contact + h_radiation
  */
-class GapConductance :
-  public Material
+class GapConductance : public Material
 {
 public:
   enum GAP_GEOMETRY
@@ -25,15 +24,14 @@ public:
 
   GapConductance(const InputParameters & parameters);
 
-  virtual ~GapConductance(){}
+  static InputParameters actionParameters();
 
-  static Real gapLength(const GAP_GEOMETRY & gap_geom, Real radius, Real r1, Real r2, Real min_gap, Real max_gap);
+  static Real gapLength(
+      const GAP_GEOMETRY & gap_geom, Real radius, Real r1, Real r2, Real min_gap, Real max_gap);
 
   static Real gapRect(Real distance, Real min_gap, Real max_gap);
-
-  static Real gapCyl( Real radius, Real r1, Real r2, Real min_denom, Real max_denom);
-
-  static Real gapSphere( Real radius, Real r1, Real r2, Real min_denom, Real max_denom);
+  static Real gapCyl(Real radius, Real r1, Real r2, Real min_denom, Real max_denom);
+  static Real gapSphere(Real radius, Real r1, Real r2, Real min_denom, Real max_denom);
 
   static void setGapGeometryParameters(const InputParameters & params,
                                        const Moose::CoordinateSystemType coord_sys,
@@ -51,16 +49,15 @@ public:
                               Real & r2,
                               Real & radius);
 
-protected:
+  virtual void initialSetup() override;
 
-  virtual void computeProperties();
-  virtual void computeQpProperties();
+protected:
+  virtual void computeQpProperties() override;
 
   /**
    * Override this to compute the conductance at _qp
    */
   virtual void computeQpConductance();
-
 
   virtual Real h_conduction();
   virtual Real h_radiation();
@@ -74,8 +71,7 @@ protected:
 
   const VariableValue & _temp;
 
-  bool _gap_geometry_params_set;
-  GAP_GEOMETRY _gap_geometry_type;
+  GAP_GEOMETRY & _gap_geometry_type;
 
   bool _quadrature;
 
@@ -91,6 +87,7 @@ protected:
   const VariableValue & _gap_temp_value;
   MaterialProperty<Real> & _gap_conductance;
   MaterialProperty<Real> & _gap_conductance_dT;
+  MaterialProperty<Real> & _gap_thermal_conductivity;
 
   const Real _gap_conductivity;
   Function * const _gap_conductivity_function;
@@ -104,15 +101,15 @@ protected:
 
   MooseVariable * _temp_var;
   PenetrationLocator * _penetration_locator;
-  const NumericVector<Number> * * _serialized_solution;
+  const NumericVector<Number> ** _serialized_solution;
   DofMap * _dof_map;
   const bool _warnings;
 
-  Point _p1;
-  Point _p2;
+  Point & _p1;
+  Point & _p2;
 };
 
-template<>
+template <>
 InputParameters validParams<GapConductance>();
 
-#endif //GAPCONDUCTANCE_H
+#endif // GAPCONDUCTANCE_H

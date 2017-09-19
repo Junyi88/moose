@@ -18,15 +18,14 @@
 // MOOSE includes
 #include "Moose.h"
 
-// libmesh includes
 #include "libmesh/vector_value.h"
 #include "libmesh/point.h"
 
 // libMesh forward declarations
 namespace libMesh
 {
-  class Node;
-  class Elem;
+class Node;
+class Elem;
 }
 
 /**
@@ -37,7 +36,6 @@ namespace libMesh
 class ElementPairInfo
 {
 public:
-
   ElementPairInfo(const Elem * elem1,
                   const Elem * elem2,
                   const std::vector<Point> & elem1_constraint_q_point,

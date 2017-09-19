@@ -17,7 +17,6 @@
 
 #include "ThreadedElementLoop.h"
 
-// libMesh includes
 #include "libmesh/elem_range.h"
 
 class AuxiliarySystem;
@@ -25,7 +24,7 @@ class AuxiliarySystem;
 class ComputeMarkerThread : public ThreadedElementLoop<ConstElemRange>
 {
 public:
-  ComputeMarkerThread(FEProblem & fe_problem, AuxiliarySystem & sys);
+  ComputeMarkerThread(FEProblemBase & fe_problem);
 
   // Splitting Constructor
   ComputeMarkerThread(ComputeMarkerThread & x, Threads::split split);
@@ -42,11 +41,11 @@ public:
   void join(const ComputeMarkerThread & /*y*/);
 
 protected:
-  FEProblem & _fe_problem;
+  FEProblemBase & _fe_problem;
   AuxiliarySystem & _aux_sys;
 
-  /// Reference to the Marker warhouse in FEProblem
+  /// Reference to the Marker warhouse in FEProblemBase
   const MooseObjectWarehouse<Marker> & _marker_whs;
 };
 
-#endif //COMPUTEMARKERTHREAD_H
+#endif // COMPUTEMARKERTHREAD_H

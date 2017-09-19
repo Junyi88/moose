@@ -17,17 +17,15 @@
 
 #include "GeneralVectorPostprocessor.h"
 #include "SamplerBase.h"
-#include "Function.h"
 
-//Forward Declarations
+// Forward Declarations
+class Function;
 class LineFunctionSampler;
 
-template<>
+template <>
 InputParameters validParams<LineFunctionSampler>();
 
-class LineFunctionSampler :
-  public GeneralVectorPostprocessor,
-  protected SamplerBase
+class LineFunctionSampler : public GeneralVectorPostprocessor, protected SamplerBase
 {
 public:
   LineFunctionSampler(const InputParameters & parameters);
@@ -40,9 +38,6 @@ public:
   // overload resolution process, otherwise we get warnings about
   // overloaded virtual functions and "hiding" in debug mode.
   using SamplerBase::threadJoin;
-
-  // TODO: Is this even called (threadJoin on a general object)?
-  virtual void threadJoin(const UserObject & y) override;
 
 protected:
   /// Beginning of the line

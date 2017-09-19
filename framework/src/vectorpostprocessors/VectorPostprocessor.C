@@ -20,8 +20,9 @@
 #include "VectorPostprocessorData.h"
 #include "FEProblem.h"
 
-template<>
-InputParameters validParams<VectorPostprocessor>()
+template <>
+InputParameters
+validParams<VectorPostprocessor>()
 {
   InputParameters params = validParams<UserObject>();
   params += validParams<OutputInterface>();
@@ -31,10 +32,11 @@ InputParameters validParams<VectorPostprocessor>()
   return params;
 }
 
-VectorPostprocessor::VectorPostprocessor(const InputParameters & parameters) :
-    OutputInterface(parameters),
+VectorPostprocessor::VectorPostprocessor(const InputParameters & parameters)
+  : OutputInterface(parameters),
     _vpp_name(MooseUtils::shortName(parameters.get<std::string>("_object_name"))),
-    _vpp_fe_problem(parameters.getCheckedPointerParam<FEProblem *>("_fe_problem"))
+    _vpp_fe_problem(parameters.getCheckedPointerParam<FEProblemBase *>("_fe_problem_base")),
+    _vpp_tid(parameters.isParamValid("_tid") ? parameters.get<THREAD_ID>("_tid") : 0)
 {
 }
 
@@ -47,5 +49,8 @@ VectorPostprocessor::getVector(const std::string & vector_name)
 VectorPostprocessorValue &
 VectorPostprocessor::declareVector(const std::string & vector_name)
 {
-  return _vpp_fe_problem->declareVectorPostprocessorVector(_vpp_name, vector_name);
+  if (_vpp_tid)
+    return _thread_local_vectors.emplace(vector_name, VectorPostprocessorValue()).first->second;
+  else
+    return _vpp_fe_problem->declareVectorPostprocessorVector(_vpp_name, vector_name);
 }

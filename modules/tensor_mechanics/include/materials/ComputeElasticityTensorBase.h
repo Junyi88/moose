@@ -7,13 +7,16 @@
 #ifndef COMPUTEELASTICITYTENSORBASE_H
 #define COMPUTEELASTICITYTENSORBASE_H
 
+#include "DerivativeMaterialInterface.h"
 #include "Material.h"
 #include "RankFourTensor.h"
+#include "GuaranteeProvider.h"
 
 /**
  * ComputeElasticityTensorBase the base class for computing elasticity tensors
  */
-class ComputeElasticityTensorBase : public DerivativeMaterialInterface<Material>
+class ComputeElasticityTensorBase : public DerivativeMaterialInterface<Material>,
+                                    public GuaranteeProvider
 {
 public:
   ComputeElasticityTensorBase(const InputParameters & parameters);
@@ -31,4 +34,4 @@ protected:
   Function * const _prefactor_function;
 };
 
-#endif //COMPUTEELASTICITYTENSORBASE_H
+#endif // COMPUTEELASTICITYTENSORBASE_H

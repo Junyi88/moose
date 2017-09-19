@@ -11,12 +11,12 @@
 #include "EulerAngleProvider.h"
 #include "GrainTracker.h"
 
-//Forward Declarations
+// Forward Declarations
 class EulerAngleProvider2RGBAux;
 class GrainTracker;
 class EulerAngleProvider;
 
-template<>
+template <>
 InputParameters validParams<EulerAngleProvider2RGBAux>();
 
 /**
@@ -48,6 +48,9 @@ protected:
 
   /// precalculated element value
   Real _value;
+
+  /// Vector containing values for color in regions without grains
+  const Point _no_grain_color;
 };
 
-#endif //EULERANGLEPROVIDER2RGBAUX_H
+#endif // EULERANGLEPROVIDER2RGBAUX_H

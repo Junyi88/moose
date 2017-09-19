@@ -17,11 +17,11 @@
 
 #include "Kernel.h"
 
-//Forward Declarations
+// Forward Declarations
 class BodyForce;
 class Function;
 
-template<>
+template <>
 InputParameters validParams<BodyForce>();
 
 /**
@@ -40,7 +40,7 @@ public:
 protected:
   virtual Real computeQpResidual() override;
 
-  Real _value;
+  const Real & _value;
   Function & _function;
   const PostprocessorValue * const _postprocessor;
 };

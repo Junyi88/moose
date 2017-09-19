@@ -6,23 +6,26 @@
 /****************************************************************/
 #include "ComputeCosseratLinearElasticStress.h"
 
-template<>
-InputParameters validParams<ComputeCosseratLinearElasticStress>()
+template <>
+InputParameters
+validParams<ComputeCosseratLinearElasticStress>()
 {
   InputParameters params = validParams<ComputeCosseratStressBase>();
-  params.addClassDescription("Compute Cosserat stress and couple-stress elasticity for small strains");
+  params.addClassDescription(
+      "Compute Cosserat stress and couple-stress elasticity for small strains");
   return params;
 }
 
-ComputeCosseratLinearElasticStress::ComputeCosseratLinearElasticStress(const InputParameters & parameters) :
-    ComputeCosseratStressBase(parameters)
+ComputeCosseratLinearElasticStress::ComputeCosseratLinearElasticStress(
+    const InputParameters & parameters)
+  : ComputeCosseratStressBase(parameters)
 {
 }
 
 void
 ComputeCosseratLinearElasticStress::initialSetup()
 {
-  if (hasMaterialProperty<RankTwoTensor>(_base_name + "strain_increment"))
+  if (hasBlockMaterialProperty<RankTwoTensor>(_base_name + "strain_increment"))
     mooseError("This linear elastic stress calculation only works for small strains");
 }
 

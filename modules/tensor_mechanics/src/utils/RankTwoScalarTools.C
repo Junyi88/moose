@@ -5,9 +5,11 @@
 /*             See LICENSE for full restrictions                */
 /****************************************************************/
 
-#include "MooseTypes.h"
-#include "RankTwoTensor.h"
 #include "RankTwoScalarTools.h"
+
+// MOOSE includes
+#include "MooseEnum.h"
+#include "RankTwoTensor.h"
 
 namespace RankTwoScalarTools
 {
@@ -15,11 +17,19 @@ namespace RankTwoScalarTools
 MooseEnum
 scalarOptions()
 {
-  return MooseEnum("VonMisesStress EquivalentPlasticStrain Hydrostatic L2norm MaxPrincipal MidPrincipal MinPrincipal VolumetricStrain FirstInvariant SecondInvariant ThirdInvariant AxialStress HoopStress RadialStress TriaxialityStress Direction");
+  return MooseEnum("VonMisesStress EffectiveStrain Hydrostatic L2norm MaxPrincipal "
+                   "MidPrincipal MinPrincipal VolumetricStrain FirstInvariant SecondInvariant "
+                   "ThirdInvariant AxialStress HoopStress RadialStress TriaxialityStress "
+                   "Direction");
 }
 
 Real
-getQuantity(const RankTwoTensor & tensor, const MooseEnum scalar_type, const Point & point1, const Point & point2, const Point & curr_point, Point & direction)
+getQuantity(const RankTwoTensor & tensor,
+            const MooseEnum scalar_type,
+            const Point & point1,
+            const Point & point2,
+            const Point & curr_point,
+            Point & direction)
 {
   Real val = 0.0;
 
@@ -29,8 +39,7 @@ getQuantity(const RankTwoTensor & tensor, const MooseEnum scalar_type, const Poi
       val = vonMisesStress(tensor);
       break;
     case 1:
-      ///For plastic strain tensor (ep), tr(ep) = 0 is considered
-      val = equivalentPlasticStrain(tensor);
+      val = effectiveStrain(tensor);
       break;
     case 2:
       val = hydrostatic(tensor);
@@ -39,13 +48,13 @@ getQuantity(const RankTwoTensor & tensor, const MooseEnum scalar_type, const Poi
       val = L2norm(tensor);
       break;
     case 4:
-      val = maxPrinciple(tensor);
+      val = maxPrincipal(tensor, direction);
       break;
     case 5:
-      val = midPrinciple(tensor);
+      val = midPrincipal(tensor, direction);
       break;
     case 6:
-      val = minPrinciple(tensor);
+      val = minPrincipal(tensor, direction);
       break;
     case 7:
       val = volumetricStrain(tensor);
@@ -75,7 +84,8 @@ getQuantity(const RankTwoTensor & tensor, const MooseEnum scalar_type, const Poi
       val = directionValueTensor(tensor, direction);
       break;
     default:
-      mooseError("RankTwoScalarAux Error: Pass valid scalar type - " + scalarOptions().getRawNames());
+      mooseError("RankTwoScalarAux Error: Pass valid scalar type - " +
+                 scalarOptions().getRawNames());
   }
 
   return val;
@@ -107,13 +117,13 @@ vonMisesStress(const RankTwoTensor & stress)
 {
   RankTwoTensor dev_stress = stress.deviatoric();
 
-  return std::pow(3.0 / 2.0 * dev_stress.doubleContraction(dev_stress), 0.5);
+  return std::sqrt(3.0 / 2.0 * dev_stress.doubleContraction(dev_stress));
 }
 
 Real
-equivalentPlasticStrain(const RankTwoTensor & strain)
+effectiveStrain(const RankTwoTensor & strain)
 {
-  return std::pow(2.0 / 3.0 * strain.doubleContraction(strain), 0.5);
+  return std::sqrt(2.0 / 3.0 * strain.doubleContraction(strain));
 }
 
 Real
@@ -176,36 +186,41 @@ thirdInvariant(const RankTwoTensor & r2tensor)
 }
 
 Real
-maxPrinciple(const RankTwoTensor & r2tensor)
+maxPrincipal(const RankTwoTensor & r2tensor, Point & direction)
 {
-  return calcEigenValues(r2tensor, (LIBMESH_DIM - 1));
+  return calcEigenValuesEigenVectors(r2tensor, (LIBMESH_DIM - 1), direction);
 }
 
 Real
-midPrinciple(const RankTwoTensor & r2tensor)
+midPrincipal(const RankTwoTensor & r2tensor, Point & direction)
 {
-  return  calcEigenValues(r2tensor, 1);
+  return calcEigenValuesEigenVectors(r2tensor, 1, direction);
 }
 
 Real
-minPrinciple(const RankTwoTensor & r2tensor)
+minPrincipal(const RankTwoTensor & r2tensor, Point & direction)
 {
-  return calcEigenValues(r2tensor, 0);
+  return calcEigenValuesEigenVectors(r2tensor, 0, direction);
 }
 
 Real
-calcEigenValues(const RankTwoTensor & r2tensor, unsigned int index)
+calcEigenValuesEigenVectors(const RankTwoTensor & r2tensor, unsigned int index, Point & eigenvec)
 {
   std::vector<Real> eigenval(LIBMESH_DIM);
-  r2tensor.symmetricEigenvalues(eigenval);
+  RankTwoTensor eigvecs;
+  r2tensor.symmetricEigenvaluesEigenvectors(eigenval, eigvecs);
 
   Real val = eigenval[index];
+  eigenvec = eigvecs.column(index);
 
   return val;
 }
 
 Real
-axialStress(const RankTwoTensor & stress, const Point & point1, const Point & point2, Point & direction)
+axialStress(const RankTwoTensor & stress,
+            const Point & point1,
+            const Point & point2,
+            Point & direction)
 {
   Point axis = point2 - point1;
   axis /= axis.norm();
@@ -222,7 +237,11 @@ axialStress(const RankTwoTensor & stress, const Point & point1, const Point & po
 }
 
 Real
-hoopStress(const RankTwoTensor & stress, const Point & point1, const Point & point2, const Point & curr_point, Point & direction)
+hoopStress(const RankTwoTensor & stress,
+           const Point & point1,
+           const Point & point2,
+           const Point & curr_point,
+           Point & direction)
 {
   // Calculate the cross of the normal to the axis of rotation from the current
   // location and the axis of rotation
@@ -244,7 +263,11 @@ hoopStress(const RankTwoTensor & stress, const Point & point1, const Point & poi
 }
 
 Real
-radialStress(const RankTwoTensor & stress, const Point & point1, const Point & point2, const Point & curr_point, Point & direction)
+radialStress(const RankTwoTensor & stress,
+             const Point & point1,
+             const Point & point2,
+             const Point & curr_point,
+             Point & direction)
 {
   Point radial_norm;
   normalPositionVector(point1, point2, curr_point, radial_norm);
@@ -262,14 +285,17 @@ radialStress(const RankTwoTensor & stress, const Point & point1, const Point & p
 }
 
 void
-normalPositionVector(const Point & point1, const Point & point2, const Point & curr_point, Point & normalPosition)
+normalPositionVector(const Point & point1,
+                     const Point & point2,
+                     const Point & curr_point,
+                     Point & normalPosition)
 {
   // Find the nearest point on the axis of rotation (defined by point2 - point1)
   // to the current position, e.g. the normal to the axis of rotation at the
   // current position
   Point axis_rotation = point2 - point1;
   Point positionWRTpoint1 = point1 - curr_point;
-  Real projection =  (axis_rotation * positionWRTpoint1) / axis_rotation.norm_sq();
+  Real projection = (axis_rotation * positionWRTpoint1) / axis_rotation.norm_sq();
   Point normal = point1 - projection * axis_rotation;
 
   // Calculate the direction normal to the plane formed by the axis of rotation
@@ -294,5 +320,4 @@ triaxialityStress(const RankTwoTensor & stress)
 {
   return hydrostatic(stress) / vonMisesStress(stress);
 }
-
 }

@@ -15,15 +15,14 @@
 #ifndef GRADIENTJUMPINDICATOR_H
 #define GRADIENTJUMPINDICATOR_H
 
-#include "JumpIndicator.h"
+#include "InternalSideIndicator.h"
 
 class GradientJumpIndicator;
 
-template<>
+template <>
 InputParameters validParams<GradientJumpIndicator>();
 
-class GradientJumpIndicator :
-  public JumpIndicator
+class GradientJumpIndicator : public InternalSideIndicator
 {
 public:
   GradientJumpIndicator(const InputParameters & parameters);

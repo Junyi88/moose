@@ -18,19 +18,17 @@
 
 // MOOSE includes
 #include "ExecuteMooseObjectWarehouse.h"
-#include "Postprocessor.h"
 
 class UserObject;
 
 /**
- * General warehouse for storing MooseObjects based on relation to AuxKernel execution.
+ * General warehouse for storing MooseObjects based on relation to IC and AuxKernel execution.
  */
-template<typename T>
+template <typename T>
 class AuxGroupExecuteMooseObjectWarehouse : public ExecuteMooseObjectWarehouse<T>
 {
 
 public:
-
   /// Using these from base class
   using MooseObjectWarehouse<T>::checkThreadID;
   using ExecuteMooseObjectWarehouse<T>::_all_objects;
@@ -48,11 +46,13 @@ public:
   const ExecuteMooseObjectWarehouse<T> & operator[](Moose::AuxGroup group) const;
 
   /**
-   * Call this inorder to separate the stored objects into the various AuxGroup catagories.
+   * Call this to separate the stored objects into the various AuxGroup catagories.
    *
-   * @see FEProblem::initialSetup()
+   * @see FEProblemBase::initialSetup()
    */
-  void updateDependObjects(const std::set<std::string> & depend_uo, THREAD_ID tid = 0);
+  void updateDependObjects(const std::set<std::string> & depend_ic,
+                           const std::set<std::string> & depend_aux,
+                           THREAD_ID tid = 0);
 
   /**
    * Performs a sort using the DependencyResolver.
@@ -65,61 +65,72 @@ public:
   virtual void updateActive(THREAD_ID tid = 0) override;
 
 protected:
-
-  /// Storage for the PRE_AUX and POST_AUX group sorted objects (ALL is stored in the base class)
-  std::vector<ExecuteMooseObjectWarehouse<T> > _group_objects;
+  /// Storage for the group sorted objects (ALL is stored in the base class)
+  std::vector<ExecuteMooseObjectWarehouse<T>> _group_objects;
 };
 
-
-template<typename T>
-AuxGroupExecuteMooseObjectWarehouse<T>::AuxGroupExecuteMooseObjectWarehouse(bool threaded) :
-    ExecuteMooseObjectWarehouse<T>(threaded),
-    _group_objects(2) // initialize Pre/Post aux storage
+template <typename T>
+AuxGroupExecuteMooseObjectWarehouse<T>::AuxGroupExecuteMooseObjectWarehouse(bool threaded)
+  : ExecuteMooseObjectWarehouse<T>(threaded), _group_objects(3) // initialize group storage
 {
 }
 
-
-template<typename T>
-const ExecuteMooseObjectWarehouse<T> &
-AuxGroupExecuteMooseObjectWarehouse<T>::operator[](Moose::AuxGroup group) const
+template <typename T>
+const ExecuteMooseObjectWarehouse<T> & AuxGroupExecuteMooseObjectWarehouse<T>::
+operator[](Moose::AuxGroup group) const
 {
   if (group == Moose::ALL)
     return *this;
   return _group_objects[group];
 }
 
-
-template<typename T>
+template <typename T>
 void
-AuxGroupExecuteMooseObjectWarehouse<T>::updateDependObjects(const std::set<std::string> & depend_uo, THREAD_ID tid)
+AuxGroupExecuteMooseObjectWarehouse<T>::updateDependObjects(
+    const std::set<std::string> & depend_ic,
+    const std::set<std::string> & depend_aux,
+    THREAD_ID tid)
 {
   checkThreadID(tid);
 
-  for (typename std::vector<MooseSharedPointer<T> >::const_iterator it = _all_objects[tid].begin(); it != _all_objects[tid].end(); ++it)
+  constexpr std::uint16_t initial_flag_mask = static_cast<std::uint16_t>(EXEC_INITIAL);
+  constexpr std::uint16_t not_initial_flag_mask = ~static_cast<std::uint16_t>(EXEC_INITIAL);
+  constexpr std::uint16_t all_flags = std::numeric_limits<std::uint16_t>::max();
+
+  for (const auto & object_ptr : _all_objects[tid])
   {
-    if (depend_uo.find((*it)->name()) != depend_uo.end())
-      _group_objects[Moose::PRE_AUX].addObject(*it, tid);
+    bool already_added = false;
+    if (depend_ic.find(object_ptr->name()) != depend_ic.end())
+    {
+      _group_objects[Moose::PRE_IC].addObjectMask(object_ptr, tid, initial_flag_mask);
+      already_added = !object_ptr->shouldDuplicateInitialExecution();
+    }
+
+    std::uint16_t remaining_flags = already_added ? not_initial_flag_mask : all_flags;
+    if (depend_aux.find(object_ptr->name()) != depend_aux.end() ||
+        depend_ic.find(object_ptr->name()) != depend_ic.end())
+      _group_objects[Moose::PRE_AUX].addObjectMask(object_ptr, tid, remaining_flags);
     else
-      _group_objects[Moose::POST_AUX].addObject(*it, tid);
+      _group_objects[Moose::POST_AUX].addObjectMask(object_ptr, tid, remaining_flags);
   }
 }
 
-
-template<typename T>
+template <typename T>
 void
-AuxGroupExecuteMooseObjectWarehouse<T>::sort(THREAD_ID tid/*= 0*/)
+AuxGroupExecuteMooseObjectWarehouse<T>::sort(THREAD_ID tid /*= 0*/)
 {
   ExecuteMooseObjectWarehouse<T>::sort(tid);
+  _group_objects[Moose::PRE_IC].sort(tid);
   _group_objects[Moose::PRE_AUX].sort(tid);
   _group_objects[Moose::POST_AUX].sort(tid);
 }
 
-
-template<typename T>
+template <typename T>
 void
-AuxGroupExecuteMooseObjectWarehouse<T>::updateActive(THREAD_ID tid/*=0*/)
+AuxGroupExecuteMooseObjectWarehouse<T>::updateActive(THREAD_ID tid /*=0*/)
 {
   ExecuteMooseObjectWarehouse<T>::updateActive(tid);
+  _group_objects[Moose::PRE_IC].updateActive(tid);
   _group_objects[Moose::PRE_AUX].updateActive(tid);
   _group_objects[Moose::POST_AUX].updateActive(tid);
 }

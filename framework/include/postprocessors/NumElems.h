@@ -17,10 +17,10 @@
 
 #include "GeneralPostprocessor.h"
 
-//Forward Declarations
+// Forward Declarations
 class NumElems;
 
-template<>
+template <>
 InputParameters validParams<NumElems>();
 
 class NumElems : public GeneralPostprocessor
@@ -32,6 +32,14 @@ public:
   virtual void execute() override {}
 
   virtual Real getValue() override;
+
+private:
+  enum class ElemFilter
+  {
+    ACTIVE,
+    TOTAL,
+  };
+  const ElemFilter _filt;
 };
 
 #endif // NUMELEMS_H

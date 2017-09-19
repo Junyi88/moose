@@ -17,12 +17,11 @@
 
 #include "ThreadedElementLoop.h"
 
-// libMesh includes
 #include "libmesh/elem_range.h"
 
 // Forward declarations
-class FEProblem;
-class NonlinearSystem;
+class FEProblemBase;
+class NonlinearSystemBase;
 class IntegratedBC;
 class DGKernel;
 class InterfaceKernel;
@@ -33,14 +32,14 @@ class KernelWarehouse;
 class ComputeResidualThread : public ThreadedElementLoop<ConstElemRange>
 {
 public:
-  ComputeResidualThread(FEProblem & fe_problem, NonlinearSystem & sys, Moose::KernelType type);
+  ComputeResidualThread(FEProblemBase & fe_problem, Moose::KernelType type);
   // Splitting Constructor
   ComputeResidualThread(ComputeResidualThread & x, Threads::split split);
 
   virtual ~ComputeResidualThread();
 
   virtual void subdomainChanged() override;
-  virtual void onElement(const Elem * elem ) override;
+  virtual void onElement(const Elem * elem) override;
   virtual void onBoundary(const Elem * elem, unsigned int side, BoundaryID bnd_id) override;
   virtual void onInterface(const Elem * elem, unsigned int side, BoundaryID bnd_id) override;
   virtual void onInternalSide(const Elem * elem, unsigned int side) override;
@@ -50,7 +49,7 @@ public:
   void join(const ComputeResidualThread & /*y*/);
 
 protected:
-  NonlinearSystem & _sys;
+  NonlinearSystemBase & _nl;
   Moose::KernelType _kernel_type;
   unsigned int _num_cached;
 
@@ -66,9 +65,7 @@ protected:
   ///@{
   /// Reference to Kernel storage structures
   const KernelWarehouse & _kernels;
-  const MooseObjectWarehouse<KernelBase> & _time_kernels;
-  const MooseObjectWarehouse<KernelBase> & _non_time_kernels;
   ///@}
 };
 
-#endif //COMPUTERESIDUALTHREAD_H
+#endif // COMPUTERESIDUALTHREAD_H

@@ -20,17 +20,15 @@
 #include "CommonOutputAction.h"
 #include "AddVariableAction.h"
 
-template<>
-InputParameters validParams<CheckOutputAction>()
+template <>
+InputParameters
+validParams<CheckOutputAction>()
 {
   InputParameters params = validParams<Action>();
   return params;
 }
 
-CheckOutputAction::CheckOutputAction(InputParameters params) :
-  Action(params)
-{
-}
+CheckOutputAction::CheckOutputAction(InputParameters params) : Action(params) {}
 
 void
 CheckOutputAction::act()
@@ -49,13 +47,15 @@ CheckOutputAction::checkVariableOutput(const std::string & task)
   if (_awh.hasActions(task))
   {
     // Loop through the actions for the given task
-    const std::vector<Action *> & actions = _awh.getActionsByName(task);
+    const auto & actions = _awh.getActionListByName(task);
     for (const auto & act : actions)
     {
-      // Cast the object to AddVariableAction so that that OutputInterface::buildOutputHideVariableList may be called
-      AddVariableAction * ptr = dynamic_cast<AddVariableAction*>(act);
+      // Cast the object to AddVariableAction so that that
+      // OutputInterface::buildOutputHideVariableList may be called
+      AddVariableAction * ptr = dynamic_cast<AddVariableAction *>(act);
 
-      // If the cast fails move to the next action, this is the case with NodalNormals which is also associated with
+      // If the cast fails move to the next action, this is the case with NodalNormals which is also
+      // associated with
       // the "add_aux_variable" task.
       if (ptr == NULL)
         continue;
@@ -77,7 +77,7 @@ CheckOutputAction::checkMaterialOutput()
     return;
 
   // A complete list of all Material objects
-  const std::vector<MooseSharedPointer<Material> > & materials = _problem->getMaterialWarehouse().getActiveObjects();
+  const auto & materials = _problem->getMaterialWarehouse().getActiveObjects();
 
   // TODO include boundary materials
 
@@ -103,7 +103,11 @@ CheckOutputAction::checkConsoleOutput()
       num_screen_outputs++;
 
   if (num_screen_outputs > 1)
-    mooseWarning("Multiple (" << num_screen_outputs << ") Console output objects are writing to the screen, this will likely cause duplicate messages printed.");
+    mooseWarning("Multiple (",
+                 num_screen_outputs,
+                 ") Console output objects are writing to the "
+                 "screen, this will likely cause duplicate "
+                 "messages printed.");
 }
 
 void
@@ -126,9 +130,7 @@ CheckOutputAction::checkPerfLogOutput()
   {
     Moose::perf_log.disable_logging();
     Moose::setup_perf_log.disable_logging();
-#ifdef LIBMESH_ENABLE_PERFORMANCE_LOGGING
     libMesh::perflog.disable_logging();
-#endif
   }
 
   // If the --timing option is used from the command-line, enable all logging
@@ -136,8 +138,6 @@ CheckOutputAction::checkPerfLogOutput()
   {
     Moose::perf_log.enable_logging();
     Moose::setup_perf_log.enable_logging();
-#ifdef LIBMESH_ENABLE_PERFORMANCE_LOGGING
     libMesh::perflog.enable_logging();
-#endif
   }
 }

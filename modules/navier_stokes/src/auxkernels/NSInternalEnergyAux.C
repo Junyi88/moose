@@ -12,11 +12,13 @@
 // MOOSE includes
 #include "MooseMesh.h"
 
-template<>
-InputParameters validParams<NSInternalEnergyAux>()
+template <>
+InputParameters
+validParams<NSInternalEnergyAux>()
 {
   InputParameters params = validParams<AuxKernel>();
 
+  params.addClassDescription("Auxiliary kernel for computing the internal energy of the fluid.");
   params.addRequiredCoupledVar(NS::density, "density");
   params.addRequiredCoupledVar(NS::velocity_x, "x-velocity");
   params.addCoupledVar(NS::velocity_y, "y-velocity"); // Only required in >= 2D
@@ -26,8 +28,8 @@ InputParameters validParams<NSInternalEnergyAux>()
   return params;
 }
 
-NSInternalEnergyAux::NSInternalEnergyAux(const InputParameters & parameters) :
-    AuxKernel(parameters),
+NSInternalEnergyAux::NSInternalEnergyAux(const InputParameters & parameters)
+  : AuxKernel(parameters),
     _rho(coupledValue(NS::density)),
     _u_vel(coupledValue(NS::velocity_x)),
     _v_vel(_mesh.dimension() >= 2 ? coupledValue(NS::velocity_y) : _zero),

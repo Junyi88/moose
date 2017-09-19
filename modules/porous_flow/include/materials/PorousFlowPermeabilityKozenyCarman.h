@@ -8,12 +8,12 @@
 #ifndef POROUSFLOWPERMEABILITYKOZENYCARMAN_H
 #define POROUSFLOWPERMEABILITYKOZENYCARMAN_H
 
-#include "PorousFlowPermeabilityUnity.h"
+#include "PorousFlowPermeabilityBase.h"
 
-//Forward Declarations
+// Forward Declarations
 class PorousFlowPermeabilityKozenyCarman;
 
-template<>
+template <>
 InputParameters validParams<PorousFlowPermeabilityKozenyCarman>();
 
 /**
@@ -30,13 +30,13 @@ InputParameters validParams<PorousFlowPermeabilityKozenyCarman>();
  * A = f * d^2
  * where f is a scalar constant and d is grain diameter.
  */
-class PorousFlowPermeabilityKozenyCarman : public PorousFlowPermeabilityUnity
+class PorousFlowPermeabilityKozenyCarman : public PorousFlowPermeabilityBase
 {
 public:
   PorousFlowPermeabilityKozenyCarman(const InputParameters & parameters);
 
 protected:
-  void computeQpProperties();
+  void computeQpProperties() override;
 
   /// Reference scalar permeability in A = k0 * (1 - phi0)^m / phi0^n
   const Real _k0;
@@ -63,13 +63,16 @@ protected:
   const MaterialProperty<Real> & _porosity_qp;
 
   /// d(quadpoint porosity)/d(PorousFlow variable)
-  const MaterialProperty<std::vector<Real> > & _dporosity_qp_dvar;
+  const MaterialProperty<std::vector<Real>> & _dporosity_qp_dvar;
+
+  /// d(quadpoint porosity)/d(grad(PorousFlow variable))
+  const MaterialProperty<std::vector<RealGradient>> & _dporosity_qp_dgradvar;
 
   /// Name of porosity-permeability relationship
-  const MooseEnum _poroperm_function;
+  const enum class PoropermFunction { kozeny_carman_fd2, kozeny_carman_phi0 } _poroperm_function;
 
   /// Multiplying factor in k = k_ijk * A * phi^n / (1 - phi)^m
   Real _A;
 };
 
-#endif //POROUSFLOWPERMEABILITYKOZENYCARMAN_H
+#endif // POROUSFLOWPERMEABILITYKOZENYCARMAN_H

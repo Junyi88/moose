@@ -20,7 +20,7 @@
 
 class LinearCombinationFunction;
 
-template<>
+template <>
 InputParameters validParams<LinearCombinationFunction>();
 
 /**
@@ -32,13 +32,13 @@ public:
   LinearCombinationFunction(const InputParameters & parameters);
 
   virtual Real value(Real t, const Point & pt) override;
+  virtual RealVectorValue vectorValue(Real t, const Point & p) override;
+  virtual RealGradient gradient(Real t, const Point & p) override;
 
 private:
-
   std::vector<Real> _w;
 
   std::vector<Function *> _f;
-
 };
 
-#endif //LINEARCOMBINATIONFUNCTION_H
+#endif // LINEARCOMBINATIONFUNCTION_H

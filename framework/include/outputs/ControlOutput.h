@@ -16,36 +16,32 @@
 #define CONTROLOUTPUT_H
 
 // MOOSE includes
-#include "BasicOutput.h"
 #include "Output.h"
 
 // Forward declarations
 class ControlOutput;
 
-template<>
+template <>
 InputParameters validParams<ControlOutput>();
 
 /**
  * Class for output information regarding Controls to the screen
  */
-class ControlOutput : public BasicOutput<Output>
+class ControlOutput : public Output
 {
 public:
-
   /**
    * Class constructor
    */
   ControlOutput(const InputParameters & parameters);
 
 protected:
-
   /**
    * Perform the output of control information
    */
   virtual void output(const ExecFlagType & type) override;
 
 private:
-
   /**
    * Output a list of active MooseObjects
    */

@@ -17,26 +17,26 @@
 
 #include "Moose.h"
 
-//libMesh
+// libMesh
 #include "libmesh/point.h"
 #include "libmesh/periodic_boundary_base.h"
 
 #include <vector>
 
-class FEProblem;
+class FEProblemBase;
 class Function;
 
 /**
- * Periodic boundary for calculation periodic BC on domains where the translation is given by functions
+ * Periodic boundary for calculation periodic BC on domains where the translation is given by
+ * functions
  */
 class FunctionPeriodicBoundary : public PeriodicBoundaryBase
 {
 public:
-
   /**
    * Initialize the periodic boundary with three functions
    */
-  FunctionPeriodicBoundary(FEProblem & subproblem, std::vector<std::string> fn_names);
+  FunctionPeriodicBoundary(FEProblemBase & subproblem, std::vector<std::string> fn_names);
 
   /**
    * Copy constructor for creating the periodic boundary and inverse periodic boundary
@@ -58,7 +58,7 @@ public:
   virtual std::unique_ptr<PeriodicBoundaryBase> clone(TransformationType t) const override;
 
 protected:
-//  /// The dimension of the problem (says which _tr_XYZ member variables are active)
+  //  /// The dimension of the problem (says which _tr_XYZ member variables are active)
   unsigned int _dim;
 
   /// Pointer to Function for x-component of the boundary
@@ -76,4 +76,4 @@ protected:
   void init();
 };
 
-#endif //FUNCTIONPERIODICBOUNDARY_H
+#endif // FUNCTIONPERIODICBOUNDARY_H

@@ -5,7 +5,7 @@
 /*             See LICENSE for full restrictions                */
 /****************************************************************/
 
-#include "XFEMApp.h"
+#include "XFEMTestApp.h"
 #include "MooseInit.h"
 #include "Moose.h"
 #include "MooseApp.h"
@@ -15,22 +15,20 @@
 PerfLog Moose::perf_log("Xfem");
 
 // Begin the main program.
-int main(int argc, char *argv[])
+int
+main(int argc, char * argv[])
 {
   // Initialize MPI, solvers and MOOSE
   MooseInit init(argc, argv);
 
   // Register this application's MooseApp and any it depends on
-  XFEMApp::registerApps();
+  XFEMTestApp::registerApps();
 
-  // This creates dynamic memory that we're responsible for deleting
-  MooseApp * app = AppFactory::createApp("XFEMApp", argc, argv);
+  // Create an instance of the application and store it in a smart pointer for easy cleanup
+  std::shared_ptr<MooseApp> app = AppFactory::createAppShared("XFEMTestApp", argc, argv);
 
   // Execute the application
   app->run();
-
-  // Free up the memory we created earlier
-  delete app;
 
   return 0;
 }

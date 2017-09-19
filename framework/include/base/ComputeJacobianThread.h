@@ -17,12 +17,11 @@
 
 #include "ThreadedElementLoop.h"
 
-// libMesh includes
 #include "libmesh/elem_range.h"
 
 // Forward declarations
-class FEProblem;
-class NonlinearSystem;
+class FEProblemBase;
+class NonlinearSystemBase;
 class IntegratedBC;
 class DGKernel;
 class InterfaceKernel;
@@ -31,7 +30,9 @@ class KernelWarehouse;
 class ComputeJacobianThread : public ThreadedElementLoop<ConstElemRange>
 {
 public:
-  ComputeJacobianThread(FEProblem & fe_problem, NonlinearSystem & sys, SparseMatrix<Number> & jacobian);
+  ComputeJacobianThread(FEProblemBase & fe_problem,
+                        SparseMatrix<Number> & jacobian,
+                        Moose::KernelType kernel_type = Moose::KT_ALL);
 
   // Splitting Constructor
   ComputeJacobianThread(ComputeJacobianThread & x, Threads::split split);
@@ -50,7 +51,7 @@ public:
 
 protected:
   SparseMatrix<Number> & _jacobian;
-  NonlinearSystem & _sys;
+  NonlinearSystemBase & _nl;
 
   unsigned int _num_cached;
 
@@ -66,10 +67,12 @@ protected:
   // Reference to Kernel storage structure
   const KernelWarehouse & _kernels;
 
+  Moose::KernelType _kernel_type;
+
   virtual void computeJacobian();
   virtual void computeFaceJacobian(BoundaryID bnd_id);
   virtual void computeInternalFaceJacobian(const Elem * neighbor);
   virtual void computeInternalInterFaceJacobian(BoundaryID bnd_id);
 };
 
-#endif //COMPUTEJACOBIANTHREAD_H
+#endif // COMPUTEJACOBIANTHREAD_H

@@ -17,7 +17,6 @@
 #include "MooseError.h"
 #include "MaterialProperty.h"
 
-// libMesh includes
 #include "libmesh/elem.h"
 
 // External includes
@@ -49,26 +48,28 @@ escape(std::string & str)
   escapes['\r'] = "\\r";
 
   for (const auto & it : escapes)
-    for (size_t pos=0; (pos=str.find(it.first, pos)) != std::string::npos; pos+=it.second.size())
+    for (size_t pos = 0; (pos = str.find(it.first, pos)) != std::string::npos;
+         pos += it.second.size())
       str.replace(pos, 1, it.second);
 }
-
 
 std::string
 trim(std::string str, const std::string & white_space)
 {
-  std::string r = str.erase(str.find_last_not_of(white_space)+1);
-  return r.erase(0,r.find_first_not_of(white_space));
+  std::string r = str.erase(str.find_last_not_of(white_space) + 1);
+  return r.erase(0, r.find_first_not_of(white_space));
 }
 
-bool pathContains(const std::string & expression,
-                  const std::string & string_to_find,
-                  const std::string & delims)
+bool
+pathContains(const std::string & expression,
+             const std::string & string_to_find,
+             const std::string & delims)
 {
   std::vector<std::string> elements;
   tokenize(expression, elements, 0, delims);
 
-  std::vector<std::string>::iterator found_it = std::find(elements.begin(), elements.end(), string_to_find);
+  std::vector<std::string>::iterator found_it =
+      std::find(elements.begin(), elements.end(), string_to_find);
   if (found_it != elements.end())
     return true;
   else
@@ -82,8 +83,10 @@ checkFileReadable(const std::string & filename, bool check_line_endings, bool th
   if (in.fail())
   {
     if (throw_on_unreadable)
-      mooseError((std::string("Unable to open file \"") + filename
-                  + std::string("\". Check to make sure that it exists and that you have read permission.")).c_str());
+      mooseError(
+          (std::string("Unable to open file \"") + filename +
+           std::string("\". Check to make sure that it exists and that you have read permission."))
+              .c_str());
     else
       return false;
   }
@@ -110,8 +113,10 @@ checkFileWriteable(const std::string & filename, bool throw_on_unwritable)
   if (out.fail())
   {
     if (throw_on_unwritable)
-      mooseError((std::string("Unable to open file \"") + filename
-                  + std::string("\". Check to make sure that it exists and that you have write permission.")).c_str());
+      mooseError(
+          (std::string("Unable to open file \"") + filename +
+           std::string("\". Check to make sure that it exists and that you have write permission."))
+              .c_str());
     else
       return false;
   }
@@ -129,11 +134,13 @@ parallelBarrierNotify(const Parallel::Communicator & comm)
   if (comm.rank() == 0)
   {
     // The master process is already through, so report it
-    Moose::out << "Jobs complete: 1/" << comm.size() << (1 == comm.size() ? "\n" : "\r") << std::flush;
-    for (unsigned int i=2; i<=comm.size(); ++i)
+    Moose::out << "Jobs complete: 1/" << comm.size() << (1 == comm.size() ? "\n" : "\r")
+               << std::flush;
+    for (unsigned int i = 2; i <= comm.size(); ++i)
     {
       comm.receive(MPI_ANY_SOURCE, slave_processor_id);
-      Moose::out << "Jobs complete: " << i << "/" << comm.size() << (i == comm.size() ? "\n" : "\r") << std::flush;
+      Moose::out << "Jobs complete: " << i << "/" << comm.size() << (i == comm.size() ? "\n" : "\r")
+                 << std::flush;
     }
   }
   else
@@ -145,6 +152,36 @@ parallelBarrierNotify(const Parallel::Communicator & comm)
   comm.barrier();
 }
 
+void
+serialBegin(const libMesh::Parallel::Communicator & comm)
+{
+  // unless we are the first processor...
+  if (comm.rank() > 0)
+  {
+    // ...wait for the previous processor to finish
+    int dummy = 0;
+    comm.receive(comm.rank() - 1, dummy);
+  }
+  else
+    mooseWarning("Entering serial execution block (use only for debugging)");
+}
+
+void
+serialEnd(const libMesh::Parallel::Communicator & comm)
+{
+  // unless we are the last processor...
+  if (comm.rank() + 1 < comm.size())
+  {
+    // ...notify the next processor of its turn
+    int dummy = 0;
+    comm.send(comm.rank() + 1, dummy);
+  }
+
+  comm.barrier();
+  if (comm.rank() == 0)
+    mooseWarning("Leaving serial execution block (use only for debugging)");
+}
+
 bool
 hasExtension(const std::string & filename, std::string ext, bool strip_exodus_ext)
 {
@@ -152,7 +189,8 @@ hasExtension(const std::string & filename, std::string ext, bool strip_exodus_ex
   std::string file_ext;
   if (strip_exodus_ext)
   {
-    pcrecpp::RE re(".*\\.([^\\.]*?)(?:-s\\d+)?\\s*$"); // capture the complete extension, ignoring -s*
+    pcrecpp::RE re(
+        ".*\\.([^\\.]*?)(?:-s\\d+)?\\s*$"); // capture the complete extension, ignoring -s*
     re.FullMatch(filename, &file_ext);
   }
   else
@@ -173,7 +211,7 @@ splitFileName(std::string full_file)
 {
   // Error if path ends with /
   if (full_file.empty() || *full_file.rbegin() == '/')
-    mooseError("Invalid full file name: " << full_file);
+    mooseError("Invalid full file name: ", full_file);
 
   // Define the variables to output
   std::string path;
@@ -191,7 +229,7 @@ splitFileName(std::string full_file)
   else
   {
     path = full_file.substr(0, found);
-    file = full_file.substr(found+1);
+    file = full_file.substr(found + 1);
   }
 
   // Return the path and file as a pair
@@ -203,7 +241,7 @@ camelCaseToUnderscore(const std::string & camel_case_name)
 {
   string replaced = camel_case_name;
   // Put underscores in front of each contiguous set of capital letters
-  pcrecpp::RE("(?!^)([A-Z]+)").GlobalReplace("_\\1", &replaced);
+  pcrecpp::RE("(?!^)(?<![A-Z])([A-Z]+)").GlobalReplace("_\\1", &replaced);
 
   // Convert all capital letters to lower case
   std::transform(replaced.begin(), replaced.end(), replaced.begin(), ::tolower);
@@ -251,13 +289,13 @@ shortName(const std::string & name)
 std::string
 baseName(const std::string & name)
 {
- return name.substr(0, name.find_last_of('/') != std::string::npos ? name.find_last_of('/') : 0);
+  return name.substr(0, name.find_last_of('/') != std::string::npos ? name.find_last_of('/') : 0);
 }
 
 bool
 absoluteFuzzyEqual(const Real & var1, const Real & var2, const Real & tol)
 {
-  return (std::abs(var1 - var2) < tol);
+  return (std::abs(var1 - var2) <= tol);
 }
 
 bool
@@ -287,35 +325,36 @@ absoluteFuzzyLessThan(const Real & var1, const Real & var2, const Real & tol)
 bool
 relativeFuzzyEqual(const Real & var1, const Real & var2, const Real & tol)
 {
-  return (absoluteFuzzyEqual(var1, var2, tol*(std::abs(var1)+std::abs(var2))));
+  return (absoluteFuzzyEqual(var1, var2, tol * (std::abs(var1) + std::abs(var2))));
 }
 
 bool
 relativeFuzzyGreaterEqual(const Real & var1, const Real & var2, const Real & tol)
 {
-  return (absoluteFuzzyGreaterEqual(var1, var2, tol*(std::abs(var1)+std::abs(var2))));
+  return (absoluteFuzzyGreaterEqual(var1, var2, tol * (std::abs(var1) + std::abs(var2))));
 }
 
 bool
 relativeFuzzyGreaterThan(const Real & var1, const Real & var2, const Real & tol)
 {
-  return (absoluteFuzzyGreaterThan(var1, var2, tol*(std::abs(var1)+std::abs(var2))));
+  return (absoluteFuzzyGreaterThan(var1, var2, tol * (std::abs(var1) + std::abs(var2))));
 }
 
 bool
 relativeFuzzyLessEqual(const Real & var1, const Real & var2, const Real & tol)
 {
-  return (absoluteFuzzyLessEqual(var1, var2, tol*(std::abs(var1)+std::abs(var2))));
+  return (absoluteFuzzyLessEqual(var1, var2, tol * (std::abs(var1) + std::abs(var2))));
 }
 
 bool
 relativeFuzzyLessThan(const Real & var1, const Real & var2, const Real & tol)
 {
-  return (absoluteFuzzyLessThan(var1, var2, tol*(std::abs(var1)+std::abs(var2))));
+  return (absoluteFuzzyLessThan(var1, var2, tol * (std::abs(var1) + std::abs(var2))));
 }
 
 void
-MaterialPropertyStorageDump(const HashMap<const libMesh::Elem *, HashMap<unsigned int, MaterialProperties> > & props)
+MaterialPropertyStorageDump(
+    const HashMap<const libMesh::Elem *, HashMap<unsigned int, MaterialProperties>> & props)
 {
   // Loop through the elements
   for (const auto & elem_it : props)
@@ -346,18 +385,40 @@ MaterialPropertyStorageDump(const HashMap<const libMesh::Elem *, HashMap<unsigne
   }
 }
 
-void
-indentMessage(const std::string & prefix, std::string & message, const char* color/*= COLOR_CYAN*/)
+std::string &
+removeColor(std::string & msg)
 {
-  // The colored prefix
-  std::string indent = color + prefix + ": " + COLOR_DEFAULT;
+  pcrecpp::RE re("(\\33\\[3[0-7]m))", pcrecpp::DOTALL());
+  re.GlobalReplace(std::string(""), &msg);
+  return msg;
+}
 
-  // Indent all the lines until the final newline is encountered
-  pcrecpp::RE re("\n(?=.*\n)"); //(?=.*\n)
-  re.GlobalReplace(std::string("\n") + indent, &message);
+void
+indentMessage(const std::string & prefix,
+              std::string & message,
+              const char * color /*= COLOR_CYAN*/)
+{
+  // First we need to see if the message we need to indent (with color) also contains color codes
+  // that span lines.
+  // The code matches all of the XTERM constants (see XTermConstants.h). If it does, then we'll work
+  // on formatting
+  // each colored multiline chunk one at a time with the right codes.
+  std::string colored_message;
+  std::string curr_color = COLOR_DEFAULT; // tracks last color code before newline
+  std::string line, color_code;
 
-  // Prepend indent string at the front of the message
-  message = indent + message;
+  std::istringstream iss(message);
+  for (std::string line; std::getline(iss, line);) // loop over each line
+  {
+    const static pcrecpp::RE match_color(".*(\\33\\[3\\dm)((?!\\33\\[3\\d)[^\n])*");
+    pcrecpp::StringPiece line_piece(line);
+    match_color.FindAndConsume(&line_piece, &color_code);
+    colored_message += color + prefix + ": " + curr_color + line + "\n";
+
+    if (!color_code.empty())
+      curr_color = color_code; // remember last color of this line
+  }
+  message = colored_message;
 }
 
 std::list<std::string>
@@ -401,6 +462,9 @@ getRecoveryFileBase(const std::list<std::string> & checkpoint_files)
   // Loop through all possible files and store the newest
   for (const auto & cp_file : checkpoint_files)
   {
+    // Only look at the main checkpoint file, not the mesh, or restartable data files
+    if (hasExtension(cp_file, "xdr") || hasExtension(cp_file, "xda"))
+    {
       struct stat stats;
       stat(cp_file.c_str(), &stats);
 
@@ -413,12 +477,14 @@ getRecoveryFileBase(const std::list<std::string> & checkpoint_files)
 
       if (mod_time == newest_time)
         newest_restart_files.push_back(cp_file);
+    }
   }
 
   // Loop through all of the newest files according the number in the file name
   int max_file_num = -1;
   std::string max_base;
-  pcrecpp::RE re_base_and_file_num("(.*?(\\d+))\\..*"); // Will pull out the full base and the file number simultaneously
+  pcrecpp::RE re_base_and_file_num(
+      "(.*?(\\d+))\\..*"); // Will pull out the full base and the file number simultaneously
 
   // Now, out of the newest files find the one with the largest number in it
   for (const auto & res_file : newest_restart_files)
@@ -440,6 +506,58 @@ getRecoveryFileBase(const std::list<std::string> & checkpoint_files)
     max_base.clear();
 
   return max_base;
+}
+
+bool
+wildCardMatch(std::string name, std::string search_string)
+{
+  // Assume that an empty string matches anything
+  if (search_string == "")
+    return true;
+
+  // transform to lower for case insenstive matching
+  std::transform(name.begin(), name.end(), name.begin(), (int (*)(int))std::toupper);
+  std::transform(search_string.begin(),
+                 search_string.end(),
+                 search_string.begin(),
+                 (int (*)(int))std::toupper);
+
+  // exact match!
+  if (search_string.find("*") == std::string::npos)
+    return search_string == name;
+
+  // wildcard
+  std::vector<std::string> tokens;
+  MooseUtils::tokenize(search_string, tokens, 1, "*");
+
+  size_t pos = 0;
+  for (unsigned int i = 0; i < tokens.size() && pos != std::string::npos; ++i)
+  {
+    pos = name.find(tokens[i], pos);
+    // See if we have a leading wildcard
+    if (search_string[0] != '*' && i == 0 && pos != 0)
+      return false;
+  }
+
+  if (pos != std::string::npos && tokens.size() > 0)
+  {
+    // Now see if we have a trailing wildcard
+    size_t last_token_length = tokens.back().length();
+    if (*search_string.rbegin() == '*' || pos == name.size() - last_token_length)
+      return true;
+    else
+      return false;
+  }
+  else
+    return false;
+}
+
+std::string
+toUpper(const std::string & name)
+{
+  std::string upper(name);
+  std::transform(upper.begin(), upper.end(), upper.begin(), ::toupper);
+  return upper;
 }
 
 } // MooseUtils namespace

@@ -13,27 +13,34 @@
 /****************************************************************/
 
 #include "ElementalVariableValue.h"
+
+// MOOSE includes
 #include "MooseMesh.h"
+#include "MooseVariable.h"
 #include "SubProblem.h"
 
-template<>
-InputParameters validParams<ElementalVariableValue>()
+template <>
+InputParameters
+validParams<ElementalVariableValue>()
 {
   InputParameters params = validParams<GeneralPostprocessor>();
   params.addRequiredParam<VariableName>("variable", "The variable to be monitored");
   params.addRequiredParam<unsigned int>("elementid", "The ID of the element where we monitor");
+  params.addClassDescription("Outputs an elemental variable value at a particular location");
   return params;
 }
 
-ElementalVariableValue::ElementalVariableValue(const InputParameters & parameters) :
-    GeneralPostprocessor(parameters),
+ElementalVariableValue::ElementalVariableValue(const InputParameters & parameters)
+  : GeneralPostprocessor(parameters),
     _mesh(_subproblem.mesh()),
     _var_name(parameters.get<VariableName>("variable")),
     _element(_mesh.getMesh().query_elem_ptr(parameters.get<unsigned int>("elementid")))
 {
-  // This class only works with ReplicatedMesh, since it relies on a
-  // specific element numbering that we can't guarantee with DistributedMesh
-  _mesh.errorIfDistributedMesh("ElementalVariableValue");
+  // This class may be too dangerous to use if renumbering is enabled,
+  // as the nodeid parameter obviously depends on a particular
+  // numbering.
+  if (_mesh.getMesh().allow_renumbering())
+    mooseError("ElementalVariableValue should only be used when node renumbering is disabled.");
 }
 
 Real
@@ -58,4 +65,3 @@ ElementalVariableValue::getValue()
 
   return value;
 }
-

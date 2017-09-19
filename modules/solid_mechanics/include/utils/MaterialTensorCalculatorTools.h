@@ -11,7 +11,7 @@
 #include "MooseTypes.h"
 #include "SymmTensor.h"
 
-//class SymmTensor;
+// class SymmTensor;
 
 namespace MaterialTensorCalculatorTools
 {
@@ -27,7 +27,7 @@ Real component(const SymmTensor & symm_tensor, unsigned int index);
 Real component(const SymmTensor & symm_tensor, unsigned int index, RealVectorValue & direction);
 
 /*
- * The von Mises Stress is calculated in non-principle stress space
+ * The von Mises Stress is calculated in non-principal stress space
  * \sigma_{vm} = \sqrt \frac{1}{2} \left( (\sigma_x - \sigma_y)^2 + (\sigma_y - \sigma_z)^2 +
  * (\sigma_z - \sigma_z)^2 + 6 * \left( \tau_{xy}^2 + \tau_{yz}^2 + \tau_{zx}^2 \right) \right)
  * This scalar quanitity is often used to determine the onset of plasticity by
@@ -36,11 +36,10 @@ Real component(const SymmTensor & symm_tensor, unsigned int index, RealVectorVal
 Real vonMisesStress(const SymmTensor & symm_stress);
 
 /*
- * The equivalent plastic strain is calculated as
- * \epsilon_{eqv}^{pl} = \sqrt{\frac{2}{3}\epsilon_{ij}^{pl} \epsilon_{ij}^{pl}}
- * Users must take care to pass in the plastic inelastic_strain only.
+ * The effective strain is calculated as
+ * \epsilon_{eff} = \sqrt{\frac{2}{3}\epsilon_{ij} \epsilon_{ij}}
  */
-Real equivalentPlasticStrain(const SymmTensor & symm_strain);
+Real effectiveStrain(const SymmTensor & symm_strain);
 
 /*
  * The hydrostatic scalar of a tensor is computed as the sum of the diagonal
@@ -77,29 +76,34 @@ Real secondInvariant(const SymmTensor & symm_tensor);
 Real thirdInvariant(const SymmTensor & symm_tensor);
 
 /*
- * The max Principle method returns the largest principle value for a symmetric
+ * The max Principal method returns the largest principal value for a symmetric
  * tensor, using the calcEigenValues method.
  */
+Real maxPrincipal(const SymmTensor & symm_tensor, RealVectorValue & direction);
 Real maxPrinciple(const SymmTensor & symm_tensor, RealVectorValue & direction);
 
 /*
- * The mid Principle method calculates the second largest principle value for a
+ * The mid Principal method calculates the second largest principal value for a
  * tensor.  This method is valid only for 3D problems and will return an error
  * if called in 2D problems.
  */
+Real midPrincipal(const SymmTensor & symm_tensor, RealVectorValue & direction);
 Real midPrinciple(const SymmTensor & symm_tensor, RealVectorValue & direction);
 
 /*
- * The min Principle stress returns the smallest principle value from a symmetric
+ * The min Principal stress returns the smallest principal value from a symmetric
  * tensor.
  */
+Real minPrincipal(const SymmTensor & symm_tensor, RealVectorValue & direction);
 Real minPrinciple(const SymmTensor & symm_tensor, RealVectorValue & direction);
 
 /*
- * This method is called by the *Principle methods to calculate the eigenvalues
+ * This method is called by the *Principal methods to calculate the eigenvalues
  * of a symmetric tensor and return the desired value based on vector position.
  */
-Real calcPrincipleValues(const SymmTensor & symm_tensor, unsigned int index, RealVectorValue & direction);
+Real calcPrincipalValues(const SymmTensor & symm_tensor,
+                         unsigned int index,
+                         RealVectorValue & direction);
 
 /*
  * The axial stress is the scalar component of the stress tensor in an user-defined
@@ -109,7 +113,10 @@ Real calcPrincipleValues(const SymmTensor & symm_tensor, unsigned int index, Rea
  * @param point2 The end point of the rotation axis
  * @param direction The direction vector in which the scalar stress value is calculated.
  */
-Real axialStress(const SymmTensor & symm_stress, const Point & point1, const Point & point2, RealVectorValue & direction);
+Real axialStress(const SymmTensor & symm_stress,
+                 const Point & point1,
+                 const Point & point2,
+                 RealVectorValue & direction);
 
 /*
  * The hoop stress is calculated as
@@ -121,7 +128,11 @@ Real axialStress(const SymmTensor & symm_stress, const Point & point1, const Poi
  * @param curr_point The reference corresponding to the stress (pass in _q_point[_qp])
  * @param direction The direction vector in which the scalar stress value is calculated.
  */
-Real hoopStress(const SymmTensor & symm_stress, const Point & point1, const Point & point2, const Point & curr_point, RealVectorValue & direction);
+Real hoopStress(const SymmTensor & symm_stress,
+                const Point & point1,
+                const Point & point2,
+                const Point & curr_point,
+                RealVectorValue & direction);
 
 /* The radial stress is calculated as
  * radial_stress = normal^T_i * \sigma_{ij} * normal_j
@@ -132,7 +143,11 @@ Real hoopStress(const SymmTensor & symm_stress, const Point & point1, const Poin
  * @param curr_point The reference corresponding to the stress (pass in _q_point[_qp])
  * @param direction The direction vector in which the scalar stress value is calculated.
 */
-Real radialStress(const SymmTensor & symm_stress, const Point & point1, const Point & point2, const Point & curr_point, RealVectorValue & direction);
+Real radialStress(const SymmTensor & symm_stress,
+                  const Point & point1,
+                  const Point & point2,
+                  const Point & curr_point,
+                  RealVectorValue & direction);
 
 /*
  * This method is a helper method for the hoopStress and radialStress methods to
@@ -143,7 +158,10 @@ Real radialStress(const SymmTensor & symm_stress, const Point & point1, const Po
  * @param curr_point The reference corresponding to the stress (pass in _q_point[_qp])
  * @param normalPosition The vector from the current point that is normal to the rotation axis
  */
-void normalPositionVector(const Point & point1, const Point & point2, const Point & curr_point, Point & normalPosition);
+void normalPositionVector(const Point & point1,
+                          const Point & point2,
+                          const Point & curr_point,
+                          Point & normalPosition);
 
 /*
  * This method calculates the scalar value of the supplied rank-2 tensor in the
@@ -157,4 +175,4 @@ Real directionValueTensor(const SymmTensor & symm_tensor, const RealVectorValue 
 Real triaxialityStress(const SymmTensor & symm_stress);
 }
 
-#endif //MATERIALTENSORCALCULATORTOOLS_H
+#endif // MATERIALTENSORCALCULATORTOOLS_H

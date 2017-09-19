@@ -17,26 +17,28 @@
 #include "InputParameters.h"
 #include "MooseMesh.h"
 
-// libMesh includes
 #include "libmesh/mesh_generation.h"
 #include "libmesh/mesh.h"
 #include "libmesh/string_to_enum.h"
 #include "libmesh/quadrature_gauss.h"
 #include "libmesh/point_locator_base.h"
 
-template<>
-InputParameters validParams<SideSetsFromPoints>()
+template <>
+InputParameters
+validParams<SideSetsFromPoints>()
 {
   InputParameters params = validParams<AddSideSetsBase>();
-  params.addRequiredParam<std::vector<BoundaryName> >("new_boundary", "The name of the boundary to create");
-  params.addRequiredParam<std::vector<Point> >("points", "A list of points from which to start painting sidesets");
+  params.addRequiredParam<std::vector<BoundaryName>>("new_boundary",
+                                                     "The name of the boundary to create");
+  params.addRequiredParam<std::vector<Point>>(
+      "points", "A list of points from which to start painting sidesets");
   return params;
 }
 
-SideSetsFromPoints::SideSetsFromPoints(const InputParameters & parameters) :
-    AddSideSetsBase(parameters),
-    _boundary_names(getParam<std::vector<BoundaryName> >("new_boundary")),
-    _points(getParam<std::vector<Point> >("points"))
+SideSetsFromPoints::SideSetsFromPoints(const InputParameters & parameters)
+  : AddSideSetsBase(parameters),
+    _boundary_names(getParam<std::vector<BoundaryName>>("new_boundary")),
+    _points(getParam<std::vector<Point>>("points"))
 {
   if (_points.size() != _boundary_names.size())
     mooseError("point list and boundary list are not the same length");
@@ -66,7 +68,7 @@ SideSetsFromPoints::modify()
 
     for (unsigned int side = 0; side < elem->n_sides(); ++side)
     {
-      if (elem->neighbor(side))
+      if (elem->neighbor_ptr(side))
         continue;
 
       // See if this point is on this side

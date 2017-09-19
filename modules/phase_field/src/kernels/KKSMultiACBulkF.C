@@ -6,18 +6,21 @@
 /****************************************************************/
 #include "KKSMultiACBulkF.h"
 
-template<>
-InputParameters validParams<KKSMultiACBulkF>()
+template <>
+InputParameters
+validParams<KKSMultiACBulkF>()
 {
   InputParameters params = validParams<KKSMultiACBulkBase>();
-  params.addClassDescription("KKS model kernel (part 1 of 2) for the Bulk Allen-Cahn. This includes all terms NOT dependent on chemical potential.");
+  params.addClassDescription("KKS model kernel (part 1 of 2) for the Bulk Allen-Cahn. This "
+                             "includes all terms NOT dependent on chemical potential.");
   params.addRequiredParam<Real>("wi", "Double well height parameter");
-  params.addRequiredParam<MaterialPropertyName>("gi_name", "Base name for the double well function g_i(eta_i)");
+  params.addRequiredParam<MaterialPropertyName>(
+      "gi_name", "Base name for the double well function g_i(eta_i)");
   return params;
 }
 
-KKSMultiACBulkF::KKSMultiACBulkF(const InputParameters & parameters) :
-    KKSMultiACBulkBase(parameters),
+KKSMultiACBulkF::KKSMultiACBulkF(const InputParameters & parameters)
+  : KKSMultiACBulkBase(parameters),
     _wi(getParam<Real>("wi")),
     _prop_dgi(getMaterialPropertyDerivative<Real>("gi_name", _etai_name)),
     _prop_d2gi(getMaterialPropertyDerivative<Real>("gi_name", _etai_name, _etai_name))
@@ -57,9 +60,7 @@ Real
 KKSMultiACBulkF::computeQpOffDiagJacobian(unsigned int jvar)
 {
   // get the coupled variable jvar is referring to
-  unsigned int cvar;
-  if (!mapJvarToCvar(jvar, cvar))
-    return 0.0;
+  const unsigned int cvar = mapJvarToCvar(jvar);
 
   // first get dependence of mobility _L on other variables using parent class
   // member function
@@ -68,8 +69,8 @@ KKSMultiACBulkF::computeQpOffDiagJacobian(unsigned int jvar)
   // Then add dependence of KKSMultiACBulkF on other variables
   Real sum = 0.0;
   for (unsigned int n = 0; n < _num_j; ++n)
-    sum += (*_prop_d2hjdetaidarg[n][cvar])[_qp] * (*_prop_Fj[n])[_qp]
-            + (*_prop_dhjdetai[n])[_qp] * (*_prop_dFjdarg[n][cvar])[_qp];
+    sum += (*_prop_d2hjdetaidarg[n][cvar])[_qp] * (*_prop_Fj[n])[_qp] +
+           (*_prop_dhjdetai[n])[_qp] * (*_prop_dFjdarg[n][cvar])[_qp];
 
   // Handle the case when this kernel is used in the Lagrange multiplier equation
   // In this case the second derivative of the barrier function contributes

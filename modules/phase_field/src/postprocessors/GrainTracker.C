@@ -5,130 +5,227 @@
 /*             See LICENSE for full restrictions                */
 /****************************************************************/
 
-// MOOSE includes
 #include "GrainTracker.h"
-#include "MooseMesh.h"
+
+// MOOSE includes
+#include "PolycrystalUserObjectBase.h"
 #include "GeneratedMesh.h"
-#include "EBSDReader.h"
+#include "MooseMesh.h"
+#include "MooseVariable.h"
 #include "NonlinearSystem.h"
 
-// LibMesh includes
 #include "libmesh/periodic_boundary_base.h"
 
-#include <limits>
+// C++ includes
 #include <algorithm>
+#include <limits>
+#include <numeric>
 
-template<>
-InputParameters validParams<GrainTracker>()
+template <>
+void
+dataStore(std::ostream & stream, GrainTracker::PartialFeatureData & feature, void * context)
+{
+  storeHelper(stream, feature.intersects_boundary, context);
+  storeHelper(stream, feature.id, context);
+  storeHelper(stream, feature.centroid, context);
+  storeHelper(stream, feature.status, context);
+}
+
+template <>
+void
+dataLoad(std::istream & stream, GrainTracker::PartialFeatureData & feature, void * context)
+{
+  loadHelper(stream, feature.intersects_boundary, context);
+  loadHelper(stream, feature.id, context);
+  loadHelper(stream, feature.centroid, context);
+  loadHelper(stream, feature.status, context);
+}
+
+template <>
+InputParameters
+validParams<GrainTracker>()
 {
   InputParameters params = validParams<FeatureFloodCount>();
   params += validParams<GrainTrackerInterface>();
-  params.addClassDescription("Grain Tracker object for running reduced order parameter simulations without grain coalescence.");
+  params.addClassDescription("Grain Tracker object for running reduced order parameter simulations "
+                             "without grain coalescence.");
 
   return params;
 }
 
-GrainTracker::GrainTracker(const InputParameters & parameters) :
-    FeatureFloodCount(parameters),
+GrainTracker::GrainTracker(const InputParameters & parameters)
+  : FeatureFloodCount(parameters),
     GrainTrackerInterface(),
     _tracking_step(getParam<int>("tracking_step")),
     _halo_level(getParam<unsigned int>("halo_level")),
-    _n_reserve_ops(getParam<unsigned int>("reserve_op")),
-    _reserve_op_idx(_n_reserve_ops <= _n_vars ? _n_vars - _n_reserve_ops : 0),
-    _reserve_grain_first_idx(0),
+    _n_reserve_ops(getParam<unsigned short>("reserve_op")),
+    _reserve_op_index(_n_reserve_ops <= _n_vars ? _n_vars - _n_reserve_ops : 0),
     _reserve_op_threshold(getParam<Real>("reserve_op_threshold")),
     _remap(getParam<bool>("remap_grains")),
-    _nl(static_cast<FEProblem &>(_subproblem).getNonlinearSystem()),
-    _unique_grains(declareRestartableData<std::map<unsigned int, FeatureData> >("unique_grains")),
-    _ebsd_reader(parameters.isParamValid("ebsd_reader") ? &getUserObject<EBSDReader>("ebsd_reader") : nullptr),
-    _compute_op_maps(getParam<bool>("compute_op_maps"))
+    _nl(_fe_problem.getNonlinearSystemBase()),
+    _feature_sets_old(declareRestartableData<std::vector<FeatureData>>("unique_grains")),
+    _poly_ic_uo(parameters.isParamValid("polycrystal_ic_uo")
+                    ? &getUserObject<PolycrystalUserObjectBase>("polycrystal_ic_uo")
+                    : nullptr),
+    _first_time(true),
+    _error_on_grain_creation(getParam<bool>("error_on_grain_creation")),
+    _reserve_grain_first_index(0),
+    _old_max_grain_id(0),
+    _max_curr_grain_id(0),
+    _is_transient(_subproblem.isTransient())
 {
-  if (!_is_elemental && _compute_op_maps)
-    mooseError("\"compute_op_maps\" is only supported with \"flood_entity_type = ELEMENTAL\"");
-
-  _empty_2.resize(_n_vars, libMesh::invalid_uint);
+  if (_tracking_step > 0 && _poly_ic_uo)
+    mooseError("Can't start tracking after the initial condition when using a polycrystal_ic_uo");
 }
 
-GrainTracker::~GrainTracker()
-{
-}
+GrainTracker::~GrainTracker() {}
 
 Real
-GrainTracker::getEntityValue(dof_id_type node_id, FieldType field_type, unsigned int var_idx) const
+GrainTracker::getEntityValue(dof_id_type entity_id,
+                             FieldType field_type,
+                             std::size_t var_index) const
 {
   if (_t_step < _tracking_step)
     return 0;
 
-  return FeatureFloodCount::getEntityValue(node_id, field_type, var_idx);
+  return FeatureFloodCount::getEntityValue(entity_id, field_type, var_index);
 }
 
-const std::vector<std::pair<unsigned int, unsigned int> > &
-GrainTracker::getElementalValues(dof_id_type elem_id) const
+const std::vector<unsigned int> &
+GrainTracker::getVarToFeatureVector(dof_id_type elem_id) const
 {
-  const auto pos = _elemental_data.find(elem_id);
-
-  if (pos != _elemental_data.end())
-    return pos->second;
-  else
-  {
-#if DEBUG
-    mooseDoOnce(_console << "Elemental values not in structure for elem: " << elem_id << " this may be normal.");
-#endif
-    return _empty;
-  }
+  return FeatureFloodCount::getVarToFeatureVector(elem_id);
 }
 
 unsigned int
-GrainTracker::getNumberGrains() const
+GrainTracker::getFeatureVar(unsigned int feature_id) const
 {
+  return FeatureFloodCount::getFeatureVar(feature_id);
+}
+
+std::size_t
+GrainTracker::getNumberActiveGrains() const
+{
+  // Note: This value is parallel consistent, see FeatureFloodCount::communicateAndMerge()
   return _feature_count;
 }
 
-Real
-GrainTracker::getGrainVolume(unsigned int grain_id) const
+std::size_t
+GrainTracker::getTotalFeatureCount() const
 {
-  const auto feature_pair = _unique_grains.find(grain_id);
-  mooseAssert(feature_pair != _unique_grains.end(), "Grain " << grain_id << " does not exist in data structure");
-
-  return feature_pair->second._volume;
+  // Note: This value is parallel consistent, see assignGrains()/trackGrains()
+  return _max_curr_grain_id + 1;
 }
 
 Point
 GrainTracker::getGrainCentroid(unsigned int grain_id) const
 {
-  const auto feature_pair = _unique_grains.find(grain_id);
-  mooseAssert(feature_pair != _unique_grains.end(), "Grain " << grain_id << " does not exist in data structure");
+  mooseAssert(grain_id < _feature_id_to_local_index.size(), "Grain ID out of bounds");
+  auto grain_index = _feature_id_to_local_index[grain_id];
 
-  return feature_pair->second._centroid;
+  if (grain_index != invalid_size_t)
+  {
+    mooseAssert(_feature_id_to_local_index[grain_id] < _feature_sets.size(),
+                "Grain index out of bounds");
+    // Note: This value is parallel consistent, see GrainTracker::broadcastAndUpdateGrainData()
+    return _feature_sets[_feature_id_to_local_index[grain_id]]._centroid;
+  }
+
+  // Inactive grain
+  return Point();
+}
+
+bool
+GrainTracker::doesFeatureIntersectBoundary(unsigned int feature_id) const
+{
+  // TODO: This data structure may need to be turned into a Multimap
+  mooseAssert(feature_id < _feature_id_to_local_index.size(), "Grain ID out of bounds");
+
+  auto feature_index = _feature_id_to_local_index[feature_id];
+  if (feature_index != invalid_size_t)
+  {
+    mooseAssert(feature_index < _feature_sets.size(), "Grain index out of bounds");
+    return _feature_sets[feature_index]._intersects_boundary;
+  }
+
+  return false;
 }
 
 void
 GrainTracker::initialize()
 {
-  FeatureFloodCount::initialize();
+  // Don't track grains if the current simulation step is before the specified tracking step
+  if (_t_step < _tracking_step)
+    return;
 
-  _elemental_data.clear();
-  _elemental_data_2.clear();
+  /**
+   * If we are passed the first time, we need to save the existing
+   * grains before beginning the tracking on the current step. We'll do that
+   * with a swap since the _feature_sets contents will be cleared anyway.
+   */
+  if (!_first_time)
+    _feature_sets_old.swap(_feature_sets);
+
+  FeatureFloodCount::initialize();
 }
 
 void
 GrainTracker::execute()
 {
+  // Don't track grains if the current simulation step is before the specified tracking step
+  if (_t_step < _tracking_step)
+    return;
+
+  if (_poly_ic_uo && _first_time)
+    return;
+
   Moose::perf_log.push("execute()", "GrainTracker");
   FeatureFloodCount::execute();
   Moose::perf_log.pop("execute()", "GrainTracker");
 }
 
 Real
-GrainTracker::getThreshold(unsigned int current_idx, bool active_feature) const
+GrainTracker::getThreshold(std::size_t var_index) const
 {
   // If we are inspecting a reserve op parameter, we need to make sure
   // that there is an entity above the reserve_op threshold before
   // starting the flood of the feature.
-  if (!active_feature && current_idx >= _reserve_op_idx)
+  if (var_index >= _reserve_op_index)
     return _reserve_op_threshold;
   else
-    return FeatureFloodCount::getThreshold(current_idx, active_feature);
+    return _step_threshold;
+}
+
+void
+GrainTracker::prepopulateState(const FeatureFloodCount & ffc_object)
+{
+  mooseAssert(_first_time, "This method should only be called on the first invocation");
+
+  _feature_sets.clear();
+
+  /**
+   * The minimum information needed to bootstrap the GrainTracker is as follows:
+   * _feature_sets
+   * _feature_count
+   */
+  if (_is_master)
+  {
+    const auto & features = ffc_object.getFeatures();
+    for (auto & feature : features)
+      _feature_sets.emplace_back(feature.duplicate());
+
+    _feature_count = _feature_sets.size();
+  }
+  else
+  {
+    const auto & features = ffc_object.getFeatures();
+    _partial_feature_sets[0].clear();
+    for (auto & feature : features)
+      _partial_feature_sets[0].emplace_back(feature.duplicate());
+  }
+
+  // Make sure that feature count is communicated to all ranks
+  _communicator.broadcast(_feature_count);
 }
 
 void
@@ -145,492 +242,473 @@ GrainTracker::finalize()
 
   Moose::perf_log.push("finalize()", "GrainTracker");
 
-  expandHalos();
+  // Expand the depth of the halos around all grains
+  auto num_halo_layers = _halo_level >= 1
+                             ? _halo_level - 1
+                             : 0; // The first level of halos already exists so subtract one
 
-  // Build up the grain map on the root processor
-  communicateAndMerge();
+  if (_poly_ic_uo && _first_time)
+    prepopulateState(*_poly_ic_uo);
+  else
+  {
+    expandEdgeHalos(num_halo_layers);
+
+    // Build up the grain map on the root processor
+    communicateAndMerge();
+  }
 
   /**
-   * Track Grains
+   * Assign or Track Grains
    */
   Moose::perf_log.push("trackGrains()", "GrainTracker");
-  std::vector<unsigned int> new_grain_indices;
-
-  // Track grains (only on the root processor)
-  if (_is_master)
-    trackGrains(new_grain_indices);
-
-  // Communicate new grain indices with the remaining processors
-  auto new_grains_count = new_grain_indices.size();
-  _communicator.broadcast(new_grains_count);
-
-  if (new_grains_count)
-  {
-    new_grain_indices.resize(new_grains_count);
-    _communicator.broadcast(new_grain_indices);
-
-    // Trigger the callback on all processors
-    for (auto idx : new_grain_indices)
-      newGrainCreated(idx);
-  }
-
-  {
-    std::vector<int> counts;
-    std::vector<unsigned int> local_to_global_all;
-    if (_is_master)
-      buildLocalToGlobalIndices(local_to_global_all, counts);
-
-    // Scatter local_to_global indices to all processors and store in class member variable
-    _communicator.scatter(local_to_global_all, counts, _local_to_global_feature_map);
-  }
-
-  if (!_is_master)
-  {
-    /**
-     * On non-root processors we can't maintain the _unique_grains structure since we don't have all
-     * of the global information. We clear it every time this object runs and populate
-     * it with the information we do have.
-     */
-    _unique_grains.clear();
-
-    for (auto & list_ref : _partial_feature_sets)
-      for (auto & feature : list_ref)
-      {
-        mooseAssert(feature._orig_ids.size() == 1, "feature._orig_ids length doesn't make sense");
-        auto local_id = feature._orig_ids.begin()->second;
-
-        mooseAssert(local_id < _local_to_global_feature_map.size(), "local_id : "
-                    << local_id << " is out of range (" << _local_to_global_feature_map.size() << ')');
-        auto global_id = _local_to_global_feature_map[local_id];
-
-        /**
-         * It's possible for non-unique ids to exist in the the local_to_global map.
-         * This happens because the non-master ranks do not have merge information
-         * so grains that are broken across processor boundaries or periodic boundaries
-         * will not be merged. We handle this by merging these partial pieces on the fly
-         * as we encounter them.
-         */
-        auto feature_it = _unique_grains.find(global_id);
-        if (_unique_grains.find(global_id) == _unique_grains.end())
-          _unique_grains.emplace(std::pair<unsigned int, FeatureData>(_local_to_global_feature_map[local_id], std::move(feature)));
-        else // Grain already in the map (need to merge)
-          feature_it->second.merge(std::move(feature));
-      }
-  }
+  if (_first_time)
+    assignGrains();
+  else
+    trackGrains();
   Moose::perf_log.pop("trackGrains()", "GrainTracker");
-
   _console << "Finished inside of trackGrains" << std::endl;
 
+  /**
+   * Broadcast essential data
+   */
+  broadcastAndUpdateGrainData();
+
+  /**
+   * Remap Grains
+   */
   Moose::perf_log.push("remapGrains()", "GrainTracker");
   if (_remap)
     remapGrains();
   Moose::perf_log.pop("remapGrains()", "GrainTracker");
 
   updateFieldInfo();
-
   _console << "Finished inside of updateFieldInfo" << std::endl;
 
-  writeFeatureVolumeFile();
+  // Set the first time flag false here (after all methods of finalize() have completed)
+  _first_time = false;
 
-  if (_compute_op_maps)
-  {
-    for (const auto & grain_pair : _unique_grains)
-    {
-      if (grain_pair.second._status != Status::INACTIVE)
-      {
-        for (auto elem_id : grain_pair.second._local_ids)
-        {
-          mooseAssert(!_ebsd_reader || _unique_grain_to_ebsd_num.find(grain_pair.first) !=
-                      _unique_grain_to_ebsd_num.end(), "Bad mapping in unique_grain_to_ebsd_num");
-          _elemental_data[elem_id].emplace_back(_ebsd_reader ?
-                                                _unique_grain_to_ebsd_num[grain_pair.first] :
-                                                grain_pair.first,
-                                                grain_pair.second._var_idx);
-
-          auto data_pair = _elemental_data_2.find(elem_id);
-          if (data_pair == _elemental_data_2.end())
-          {
-            auto data_pair_pair = _elemental_data_2.emplace(elem_id, std::vector<unsigned int>(_n_vars, libMesh::invalid_uint));
-            data_pair = data_pair_pair.first;
-
-            // insert the reserve op numbers (if appropriate)
-            for (auto reserve_idx = decltype(_n_reserve_ops)(0); reserve_idx < _n_reserve_ops; ++reserve_idx)
-              data_pair->second[reserve_idx] = _reserve_grain_first_idx + reserve_idx;
-          }
-          data_pair->second[grain_pair.second._var_idx] = _ebsd_reader ? _unique_grain_to_ebsd_num[grain_pair.first] : grain_pair.first;
-        }
-      }
-    }
-  }
+  // TODO: Release non essential memory
 
   _console << "Finished inside of GrainTracker" << std::endl;
-
   Moose::perf_log.pop("finalize()", "GrainTracker");
 }
 
-const std::vector<unsigned int> &
-GrainTracker::getOpToGrainsVector(dof_id_type elem_id) const
+void
+GrainTracker::broadcastAndUpdateGrainData()
 {
-  const auto pos = _elemental_data_2.find(elem_id);
+  std::vector<PartialFeatureData> root_feature_data;
+  std::vector<std::string> send_buffer(1), recv_buffer;
 
-  if (pos != _elemental_data_2.end())
-    return pos->second;
-  else
+  if (_is_master)
   {
-#if DEBUG
-    mooseDoOnce(_console << "Elemental values not in structure for elem: " << elem_id << " this may be normal.");
-#endif
-    return _empty_2;
+    root_feature_data.reserve(_feature_sets.size());
+
+    // Populate a subset of the information in a small data structure
+    std::transform(_feature_sets.begin(),
+                   _feature_sets.end(),
+                   std::back_inserter(root_feature_data),
+                   [](FeatureData & feature) {
+                     PartialFeatureData partial_feature;
+                     partial_feature.intersects_boundary = feature._intersects_boundary;
+                     partial_feature.id = feature._id;
+                     partial_feature.centroid = feature._centroid;
+                     partial_feature.status = feature._status;
+                     return partial_feature;
+                   });
+
+    std::ostringstream oss;
+    dataStore(oss, root_feature_data, this);
+    send_buffer[0].assign(oss.str());
   }
 
+  // Broadcast the data to all ranks
+  _communicator.broadcast_packed_range((void *)(nullptr),
+                                       send_buffer.begin(),
+                                       send_buffer.end(),
+                                       (void *)(nullptr),
+                                       std::back_inserter(recv_buffer));
+
+  // Unpack and update
+  if (!_is_master)
+  {
+    std::istringstream iss;
+    iss.str(recv_buffer[0]);
+    iss.clear();
+
+    dataLoad(iss, root_feature_data, this);
+
+    for (const auto & partial_data : root_feature_data)
+    {
+      // See if this processor has a record of this grain
+      if (partial_data.id < _feature_id_to_local_index.size() &&
+          _feature_id_to_local_index[partial_data.id] != invalid_size_t)
+      {
+        auto & grain = _feature_sets[_feature_id_to_local_index[partial_data.id]];
+        grain._intersects_boundary = partial_data.intersects_boundary;
+        grain._centroid = partial_data.centroid;
+        if (partial_data.status == Status::INACTIVE)
+          grain._status = Status::INACTIVE;
+      }
+    }
+  }
 }
 
 void
-GrainTracker::expandHalos()
+GrainTracker::assignGrains()
 {
-  for (auto & list_ref  : _partial_feature_sets)
-  {
-    for (auto & feature : list_ref)
-    {
-      for (auto halo_level = decltype(_halo_level)(1); halo_level < _halo_level; ++halo_level)
-      {
-        /**
-         * Create a copy of the halo set so that as we insert new ids into the
-         * set we don't continue to iterate on those new ids.
-         */
-        std::set<dof_id_type> orig_halo_ids(feature._halo_ids);
-
-        for (auto entity : orig_halo_ids)
-        {
-          if (_is_elemental)
-            visitElementalNeighbors(_mesh.elemPtr(entity), feature._var_idx, &feature, /*expand_halos_only =*/true);
-          else
-            visitNodalNeighbors(_mesh.nodePtr(entity), feature._var_idx, &feature, /*expand_halos_only =*/true);
-        }
-      }
-    }
-  }
-}
-
-void
-GrainTracker::trackGrains(std::vector<unsigned int> & new_grain_indices)
-{
-  // Don't track grains if the current simulation step is before the specified tracking step
-  if (_t_step < _tracking_step)
-    return;
-
-  mooseAssert(_is_master, "trackGrains() should only be called on the root process");
-
-  // Reset Status on active unique grains
-  std::vector<unsigned int> map_sizes(_maps_size);
-  for (auto & grain_pair : _unique_grains)
-  {
-    if (grain_pair.second._status != Status::INACTIVE)
-    {
-      grain_pair.second._status = Status::CLEAR;
-      map_sizes[grain_pair.second._var_idx]++;
-    }
-  }
-
-  // Print out info on the number of unique grains per variable vs the incoming feature set sizes
-  if (_t_step > _tracking_step)
-  {
-    bool display_them = false;
-    for (auto map_num = decltype(_maps_size)(0); map_num < _maps_size; ++map_num)
-    {
-      _console << "\nGrains active index " << map_num << ": " << map_sizes[map_num] << " -> " << _feature_counts_per_map[map_num];
-      if (map_sizes[map_num] > _feature_counts_per_map[map_num])
-      {
-        _console << "--";
-        display_them = true;
-      }
-      else if (map_sizes[map_num] < _feature_counts_per_map[map_num])
-      {
-        _console << "++";
-        display_them = true;
-      }
-    }
-    _console << std::endl;
-  }
+  mooseAssert(_first_time, "assignGrains may only be called on the first tracking step");
 
   /**
-   * If it's the first time through this routine for the simulation, we will generate the unique grain
-   * numbers using a simple counter.  These will be the unique grain numbers that we must track for
-   * the remainder of the simulation.
-   *
-   * If we are linked to the EBSD Reader, we'll get the numbering information from its data
-   * rather than generating our own.
+   * We need to assign grainIDs to get the simulation going. We'll use the default sorting that
+   * doesn't require valid grainIDs (relies on _min_entity_id and _var_index). These will be the
+   * unique grain numbers that we must track for remainder of the simulation.
    */
-  if (_t_step == _tracking_step)   // Start tracking when the time_step == the tracking_step
+  if (_is_master)
   {
-    if (_ebsd_reader)
+    mooseAssert(!_feature_sets.empty(), "Feature sets empty!");
+
+    // Find the largest grain ID, this requires sorting if the ID is not already set
+    sortAndLabel();
+    _max_curr_grain_id = _feature_sets[_feature_sets.size() - 1]._id;
+
+    for (auto & grain : _feature_sets)
+      grain._status = Status::MARKED; // Mark the grain
+
+    // Set up the first reserve grain index based on the largest grain ID
+    _reserve_grain_first_index = _max_curr_grain_id + 1;
+  } // is_master
+
+  /*************************************************************
+   ****************** COLLECTIVE WORK SECTION ******************
+   *************************************************************/
+
+  // Make IDs on all non-master ranks consistent
+  scatterAndUpdateRanks();
+
+  // Build up an id to index map
+  _communicator.broadcast(_max_curr_grain_id);
+  buildFeatureIdToLocalIndices(_max_curr_grain_id);
+
+  // Now trigger the newGrainCreated() callback on all ranks
+  for (auto new_id = decltype(_max_curr_grain_id)(0); new_id <= _max_curr_grain_id; ++new_id)
+    newGrainCreated(new_id);
+}
+
+void
+GrainTracker::trackGrains()
+{
+  mooseAssert(!_first_time, "Track grains may only be called when _tracking_step > _t_step");
+
+  // Used to track indices for which to trigger the new grain callback on (used on all ranks)
+  auto _old_max_grain_id = _max_curr_grain_id;
+
+  /**
+   * Only the master rank does tracking, the remaining ranks
+   * wait to receive local to global indices from the master.
+   */
+  if (_is_master)
+  {
+    // Reset Status on active unique grains
+    std::vector<unsigned int> map_sizes(_maps_size);
+    for (auto & grain : _feature_sets_old)
     {
-      auto grain_num = _ebsd_reader->getGrainNum();
-
-      std::vector<Point> center_points(grain_num);
-
-      for (decltype(grain_num) gr = 0; gr < grain_num; ++gr)
+      if (grain._status != Status::INACTIVE)
       {
-        const EBSDReader::EBSDAvgData & d = _ebsd_reader->getAvgData(gr);
-        center_points[gr] = d._p;
-
-        _console << "EBSD Grain " << gr << " " << center_points[gr] << '\n';
+        grain._status = Status::CLEAR;
+        map_sizes[grain._var_index]++;
       }
+    }
 
-      // To find the minimum distance we will use the centroidRegionDistance routine.
-      std::vector<MeshTools::BoundingBox> ebsd_vector(1);
+    // Print out stats on overall tracking changes per var_index
+    for (auto map_num = decltype(_maps_size)(0); map_num < _maps_size; ++map_num)
+    {
+      _console << "\nGrains active index " << map_num << ": " << map_sizes[map_num] << " -> "
+               << _feature_counts_per_map[map_num];
+      if (map_sizes[map_num] > _feature_counts_per_map[map_num])
+        _console << "--";
+      else if (map_sizes[map_num] < _feature_counts_per_map[map_num])
+        _console << "++";
+    }
+    _console << '\n' << std::endl;
 
-      std::set<unsigned int> used_indices;
-      std::map<unsigned int, unsigned int> error_indices;
+    /**
+     * To track grains across time steps, we will loop over our unique grains and link each one up
+     * with one of our new unique grains. The criteria for doing this will be to find the unique
+     * grain in the new list with a matching variable index whose centroid is closest to this
+     * unique grain.
+     */
+    std::vector<std::size_t> new_grain_index_to_existing_grain_index(_feature_sets.size(),
+                                                                     invalid_size_t);
 
-      if (grain_num != _feature_count && _is_master)
-        mooseWarning("Mismatch:\nEBSD centers: " << grain_num << " Grain Tracker Centers: " << _feature_count);
+    for (auto old_grain_index = beginIndex(_feature_sets_old);
+         old_grain_index < _feature_sets_old.size();
+         ++old_grain_index)
+    {
+      auto & old_grain = _feature_sets_old[old_grain_index];
 
-      auto next_index = grain_num;
+      if (old_grain._status == Status::INACTIVE) // Don't try to find matches for inactive grains
+        continue;
 
-      // Loop over all of the features (grains)
-      for (auto & feature : _feature_sets)
+      std::size_t closest_match_index = invalid_size_t;
+      Real min_centroid_diff = std::numeric_limits<Real>::max();
+
+      /**
+       * The _feature_sets vector is constructed by _var_index so we can avoid looping over all
+       * indices. We can quickly jump to the first matching index to reduce the number of
+       * comparisons and terminate our loop when our variable index stops matching.
+       */
+      // clang-format off
+      auto start_it =
+          std::lower_bound(_feature_sets.begin(), _feature_sets.end(), old_grain._var_index,
+                           [](const FeatureData & item, std::size_t var_index)
+                           {
+                             return item._var_index < var_index;
+                           });
+      // clang-format on
+
+      // We only need to examine grains that have matching variable indices
+      for (decltype(_feature_sets.size()) new_grain_index =
+               std::distance(_feature_sets.begin(), start_it);
+           new_grain_index < _feature_sets.size() &&
+           _feature_sets[new_grain_index]._var_index == old_grain._var_index;
+           ++new_grain_index)
       {
-        Real min_centroid_diff = std::numeric_limits<Real>::max();
-        unsigned int closest_match_idx = 0;
+        auto & new_grain = _feature_sets[new_grain_index];
 
-        for (auto j = beginIndex(center_points); j < center_points.size(); ++j)
+        /**
+         * Don't try to do any matching unless the bounding boxes at least overlap. This is to avoid
+         * the corner case of having a grain split and a grain disappear during the same time step!
+         */
+        if (new_grain.boundingBoxesIntersect(old_grain))
         {
-          // Update the ebsd bbox data to be used in the centroidRegionDistance calculation
-          // Since we are using centroid matching we'll just make it easy and set both the min/max of the box to the same
-          // value (i.e. a zero sized box).
-          ebsd_vector[0].min() = ebsd_vector[0].max() = center_points[j];
-
-          Real curr_centroid_diff = centroidRegionDistance(ebsd_vector, feature._bboxes);
+          Real curr_centroid_diff = centroidRegionDistance(old_grain._bboxes, new_grain._bboxes);
           if (curr_centroid_diff <= min_centroid_diff)
           {
-            closest_match_idx = j;
+            closest_match_index = new_grain_index;
             min_centroid_diff = curr_centroid_diff;
           }
         }
+      }
 
-        if (used_indices.find(closest_match_idx) != used_indices.end())
+      // found a match
+      if (closest_match_index != invalid_size_t)
+      {
+        /**
+         * It's possible that multiple existing grains will map to a single new grain (indicated by
+         * finding multiple matches when we are building this map). This will happen any time a
+         * grain disappears during this time step. We need to figure out the rightful owner in this
+         * case and inactivate the old grain.
+         */
+        auto curr_index = new_grain_index_to_existing_grain_index[closest_match_index];
+        if (curr_index != invalid_size_t)
         {
-          _console << "Re-assigning center " << closest_match_idx << " -> " << next_index << " "
-                   << center_points[closest_match_idx] << " absolute distance: " << min_centroid_diff << '\n';
-          feature._status = Status::MARKED;
-          _unique_grains[next_index] = std::move(feature);
+          // The new feature being competed for
+          auto & new_grain = _feature_sets[closest_match_index];
 
-          _unique_grain_to_ebsd_num[next_index] = closest_match_idx;
+          // The other old grain competing to match up to the same new grain
+          auto & other_old_grain = _feature_sets_old[curr_index];
 
-          ++next_index;
+          auto centroid_diff1 = centroidRegionDistance(new_grain._bboxes, old_grain._bboxes);
+          auto centroid_diff2 = centroidRegionDistance(new_grain._bboxes, other_old_grain._bboxes);
+
+          auto & inactive_grain = (centroid_diff1 < centroid_diff2) ? other_old_grain : old_grain;
+
+          inactive_grain._status = Status::INACTIVE;
+          _console << COLOR_GREEN << "Marking Grain " << inactive_grain._id
+                   << " as INACTIVE (variable index: " << inactive_grain._var_index << ")\n"
+                   << COLOR_DEFAULT << inactive_grain;
+
+          /**
+           * If the grain we just marked inactive was the one whose index was in the new grain
+           * to existing grain map (other_old_grain). Then we need to update the map to point
+           * to the new match winner.
+           */
+          if (&inactive_grain == &other_old_grain)
+            new_grain_index_to_existing_grain_index[closest_match_index] = old_grain_index;
         }
         else
+          new_grain_index_to_existing_grain_index[closest_match_index] = old_grain_index;
+      }
+    }
+
+    // Mark all resolved grain matches
+    for (auto new_index = beginIndex(new_grain_index_to_existing_grain_index);
+         new_index < new_grain_index_to_existing_grain_index.size();
+         ++new_index)
+    {
+      auto curr_index = new_grain_index_to_existing_grain_index[new_index];
+
+      // This may be a new grain, we'll handle that case below
+      if (curr_index == invalid_size_t)
+        continue;
+
+      mooseAssert(_feature_sets_old[curr_index]._id != invalid_id,
+                  "Invalid ID in old grain structure");
+
+      _feature_sets[new_index]._id = _feature_sets_old[curr_index]._id; // Transfer ID
+      _feature_sets[new_index]._status = Status::MARKED;      // Mark the status in the new set
+      _feature_sets_old[curr_index]._status = Status::MARKED; // Mark the status in the old set
+    }
+
+    /**
+     * At this point we have should have only two cases left to handle:
+     * Case 1: A grain in the new set who has an unset status (These are new grains, previously
+     *         untracked) This case is easy to understand. Since we are matching up grains by
+     *         looking at the old set and finding closest matches in the new set, any grain in
+     *         the new set that isn't matched up is simply new since some other grain satisfied
+     *         each and every request from the old set.
+     *
+     * Case 2: A grain in the old set who has an unset status (These are inactive grains that
+     *         haven't been marked) We can only fall into this case when the very last grain on
+     *         a given variable disappears during the current time step. In that case we never have
+     *         a matching _var_index in the comparison loop above so that old grain never competes
+     *         for any new grain which means it can't be marked inactive in the loop above.
+     */
+    // Case 1 (new grains in _feature_sets):
+    for (auto grain_num = beginIndex(_feature_sets); grain_num < _feature_sets.size(); ++grain_num)
+    {
+      auto & grain = _feature_sets[grain_num];
+
+      // New Grain
+      if (grain._status == Status::CLEAR)
+      {
+        /**
+         * Now we need to figure out what kind of "new" grain this is. Is it a nucleating grain that
+         * we're just barely seeing for the first time or is it a "splitting" grain. A grain that
+         * gets pinched into two or more pieces usually as it is being absorbed by other grains or
+         * possibly due to external forces. We have to handle splitting grains this way so as to
+         * no confuse them with regular grains that just happen to be in contact in this step.
+         *
+         * Splitting Grain: An grain that is unmatched by any old grain
+         *                  on the same order parameter with touching halos.
+         *
+         * Nucleating Grain: A completely new grain appearing somewhere in the domain
+         *                   not overlapping any other grain's halo.
+         *
+         * To figure out which case we are dealing with, we have to make another pass over all of
+         * the existing grains with matching variable indices to see if any of them have overlapping
+         * halos.
+         */
+
+        // clang-format off
+        auto start_it =
+            std::lower_bound(_feature_sets.begin(), _feature_sets.end(), grain._var_index,
+                             [](const FeatureData & item, std::size_t var_index)
+                             {
+                               return item._var_index < var_index;
+                             });
+        // clang-format on
+
+        // Loop over matching variable indices
+        for (decltype(_feature_sets.size()) new_grain_index =
+                 std::distance(_feature_sets.begin(), start_it);
+             new_grain_index < _feature_sets.size() &&
+             _feature_sets[new_grain_index]._var_index == grain._var_index;
+             ++new_grain_index)
         {
-          _console << "Assigning center " << closest_match_idx << " "
-                   << center_points[closest_match_idx] << " absolute distance: " << min_centroid_diff << '\n';
-          feature._status = Status::MARKED;
-          _unique_grains[closest_match_idx] = std::move(feature);
+          auto & other_grain = _feature_sets[new_grain_index];
 
-          _unique_grain_to_ebsd_num[closest_match_idx] = closest_match_idx;
+          // Splitting grain?
+          if (grain_num != new_grain_index && // Make sure indices aren't pointing at the same grain
+              other_grain._status == Status::MARKED && // and that the other grain is indeed marked
+              other_grain.boundingBoxesIntersect(grain) && // and the bboxes intersect
+              other_grain.halosIntersect(grain))           // and the halos also intersect
+          // TODO: Inspect combined volume and see if it's "close" to the expected value
+          {
+            grain._id = other_grain._id;    // Set the duplicate ID
+            grain._status = Status::MARKED; // Mark it
+            _console << COLOR_YELLOW << "Split Grain Detected "
+                     << " (variable index: " << grain._var_index << ")\n"
+                     << COLOR_DEFAULT << grain << other_grain;
+          }
+        }
 
-          used_indices.insert(closest_match_idx);
+        // Must be a nucleating grain (status is still not set)
+        if (grain._status == Status::CLEAR)
+        {
+          auto new_index = getNextUniqueID();
+          grain._id = new_index;          // Set the ID
+          grain._status = Status::MARKED; // Mark it
         }
       }
-
-      if (!error_indices.empty())
-      {
-        for (const auto & grain_pair : _unique_grains)
-          _console << "Grain " << grain_pair.first << ": " << center_points[grain_pair.first] << '\n';
-
-        _console << "Error Indices:\n";
-        for (const auto & error_kv : error_indices)
-          _console << "Grain " << error_kv.first << '(' << error_kv.second << ')' << ": " << center_points[error_kv.second] << '\n';
-
-        mooseError("Error with ESBD Mapping (see above unused indices)");
-      }
     }
-    else
+
+    // Case 2 (inactive grains in _feature_sets_old)
+    for (auto & grain : _feature_sets_old)
     {
-      unsigned int counter = 0;
-      // Move the grains from the FeatureFloodCount data structure to the _unique_grains data structure.
-      for (auto & grain : _feature_sets)
+      if (grain._status == Status::CLEAR)
       {
-        grain._status = Status::MARKED;
-        _unique_grains.emplace_hint(_unique_grains.end(), std::pair<unsigned int, FeatureData>(counter, std::move(grain)));
-        newGrainCreated(counter++);
+        grain._status = Status::INACTIVE;
+        _console << COLOR_GREEN << "Marking Grain " << grain._id
+                 << " as INACTIVE (variable index: " << grain._var_index << ")\n"
+                 << COLOR_DEFAULT << grain;
       }
-
-      // Clean up the "moved" Features
-      _feature_sets.clear();
     }
-    // Reserve op grain ids if we are using reserve_op. We'll mark the first index of the reserved id.
-    // The remaining ids (if any) are sequential
-    _reserve_grain_first_idx = _unique_grains.size();
+  } // is_master
 
-    return;  // Return early - no matching or tracking to do
-  }
+  /*************************************************************
+   ****************** COLLECTIVE WORK SECTION ******************
+   *************************************************************/
+
+  // Make IDs on all non-master ranks consistent
+  scatterAndUpdateRanks();
+
+  // Build up an id to index map
+  _communicator.broadcast(_max_curr_grain_id);
+  buildFeatureIdToLocalIndices(_max_curr_grain_id);
 
   /**
-   * To track grains across time steps, we will loop over our unique grains and link each one up with one of our new
-   * unique grains.  The criteria for doing this will be to find the unique grain in the new list with a matching variable
-   * index whose centroid is closest to this unique grain.
+   * Trigger callback for new grains
    */
-  std::map<unsigned int, unsigned int> new_grain_idx_to_existing_grain_idx;
-
-  for (auto & grain_pair : _unique_grains)
+  if (_old_max_grain_id < _max_curr_grain_id)
   {
-    if (grain_pair.second._status == Status::INACTIVE)      // Don't try to find matches for inactive grains
-      continue;
-
-    unsigned int closest_match_idx;
-    bool found_one = false;
-    Real min_centroid_diff = std::numeric_limits<Real>::max();
-
-    // We only need to examine grains that have matching variable indices
-    for (auto new_grain_idx = beginIndex(_feature_sets); new_grain_idx < _feature_sets.size(); ++new_grain_idx)
+    for (auto new_id = _old_max_grain_id + 1; new_id <= _max_curr_grain_id; ++new_id)
     {
-      // TODO: It's possible to loop over just a subset of these indices for efficiency
-      if (grain_pair.second._var_idx == _feature_sets[new_grain_idx]._var_idx)  // Do the variables indices match?
+      // Don't trigger the callback on the reserve IDs
+      if (new_id >= _reserve_grain_first_index + _n_reserve_ops)
       {
-        Real curr_centroid_diff = centroidRegionDistance(grain_pair.second._bboxes, _feature_sets[new_grain_idx]._bboxes);
-        if (curr_centroid_diff <= min_centroid_diff)
-        {
-          found_one = true;
-          closest_match_idx = new_grain_idx;
-          min_centroid_diff = curr_centroid_diff;
-        }
+        // See if we've been instructed to terminate with an error
+        if (!_first_time && _error_on_grain_creation)
+          mooseError(
+              "Error: New grain detected and \"error_on_new_grain_creation\" is set to true");
+        else
+          newGrainCreated(new_id);
       }
     }
-
-    if (found_one)
-    {
-     /**
-      * It's possible that multiple existing grains will map to a single new grain (indicated by finding multiple
-      * matches when we are building this map). This will happen any time a grain disappears during
-      * this time step. We need to figure out the rightful owner in this case and inactivate the old grain.
-      */
-      const auto map_it = new_grain_idx_to_existing_grain_idx.find(closest_match_idx);
-
-      if (map_it != new_grain_idx_to_existing_grain_idx.end())
-      {
-        // The new feature being competed for
-        auto & feature = _feature_sets[closest_match_idx];
-
-        // The two older grains competing (iterators into the map)
-        const auto & grain_it1 = _unique_grains.find(map_it->second);
-        const auto & grain_it2 = _unique_grains.find(grain_pair.first);
-
-        auto centroid_diff1 = centroidRegionDistance(feature._bboxes, grain_it1->second._bboxes);
-        auto centroid_diff2 = centroidRegionDistance(feature._bboxes, grain_it2->second._bboxes);
-
-        auto & inactive_it = (centroid_diff1 < centroid_diff2) ? grain_it2 : grain_it1;
-
-        inactive_it->second._status = Status::INACTIVE;
-        _console << "Marking Grain " << inactive_it->first << " as INACTIVE (variable index: "
-                 << inactive_it->second._var_idx << ")\n"
-                 << inactive_it->second;
-
-        // Make sure we update the new to existing map if necessary
-        if (grain_it1->first == inactive_it->first)
-          new_grain_idx_to_existing_grain_idx[closest_match_idx] = grain_pair.first;
-      }
-      else
-        new_grain_idx_to_existing_grain_idx[closest_match_idx] = grain_pair.first;
-    }
   }
-
-  // Transfer ownership of all grains where we found a match
-  for (const auto & new_to_exist_kv : new_grain_idx_to_existing_grain_idx)
-  {
-    auto curr_idx = new_to_exist_kv.second;
-                                                       // feature index
-    _unique_grains[curr_idx] = std::move(_feature_sets[new_to_exist_kv.first]);
-    _unique_grains[curr_idx]._status = Status::MARKED;
-  }
-
-  //  Next we need to look at our new list and see which grains weren't matched up.  These are new grains.
-  for (auto feature_num = beginIndex(_feature_sets); feature_num < _feature_sets.size(); ++feature_num)
-    // If it's not in the index list, it hasn't been transferred
-    if (new_grain_idx_to_existing_grain_idx.find(feature_num) == new_grain_idx_to_existing_grain_idx.end())
-    {
-      mooseAssert(_feature_sets[feature_num]._status == Status::CLEAR, "Feature in wrong state, logic error");
-
-      auto new_idx = _unique_grains.size() + _n_reserve_ops;
-
-      _feature_sets[feature_num]._status = Status::MARKED;               // Mark it
-      _unique_grains[new_idx] = std::move(_feature_sets[feature_num]);   // transfer ownership
-
-      // Save off the ids of the newly created grains for the remaining ranks
-      new_grain_indices.emplace_back(new_idx);
-    }
-
-  /**
-   * Finally we need to mark any grains in the unique list that aren't marked as inactive.  These are the unique grains
-   * that didn't match up to any new feature. This should only happen if it's the last active grain for
-   * this particular variable.
-   */
-  for (auto & grain_pair : _unique_grains)
-    if (grain_pair.second._status == Status::CLEAR)
-    {
-      grain_pair.second._status = Status::INACTIVE;
-      _console << "Marking Grain " << grain_pair.first << " as INACTIVE (variable index: "
-               << grain_pair.second._var_idx <<  ")\n"
-               << grain_pair.second;
-    }
 }
 
 void
-GrainTracker::newGrainCreated(unsigned int new_grain_idx)
+GrainTracker::newGrainCreated(unsigned int new_grain_id)
 {
-  if (_t_step > _tracking_step)
+  if (!_first_time && _is_master)
+  {
+    mooseAssert(new_grain_id < _feature_id_to_local_index.size(), "new_grain_id is out of bounds");
+    auto grain_index = _feature_id_to_local_index[new_grain_id];
+    mooseAssert(grain_index != invalid_size_t && grain_index < _feature_sets.size(),
+                "new_grain_id appears to be invalid");
+
+    const auto & grain = _feature_sets[grain_index];
     _console << COLOR_YELLOW
-             << "*****************************************************************************\n"
-             << "Couldn't find a matching grain while working on variable index: " << _unique_grains[new_grain_idx]._var_idx
-             << "\nCreating new unique grain: " << new_grain_idx << '\n' << _unique_grains[new_grain_idx]
-             << "\n*****************************************************************************\n" << COLOR_DEFAULT;
+             << "\n*****************************************************************************"
+             << "\nCouldn't find a matching grain while working on variable index: "
+             << grain._var_index << "\nCreating new unique grain: " << new_grain_id << '\n'
+             << grain
+             << "\n*****************************************************************************\n"
+             << COLOR_DEFAULT;
+  }
 }
 
-void
-GrainTracker::buildLocalToGlobalIndices(std::vector<unsigned int> & local_to_global_all, std::vector<int> & counts) const
+std::vector<unsigned int>
+GrainTracker::getNewGrainIDs() const
 {
-  mooseAssert(_is_master, "This method must only be called on the root processor");
+  std::vector<unsigned int> new_ids(_max_curr_grain_id - _old_max_grain_id);
+  auto new_id = _old_max_grain_id + 1;
 
-  counts.resize(_n_procs, 0);
-  for (const auto & grain_pair : _unique_grains)
-  {
-    if (grain_pair.second._status == Status::INACTIVE)
-      continue;
+  // Generate the new ids
+  std::iota(new_ids.begin(), new_ids.end(), new_id);
 
-    for (const auto & local_index_pair : grain_pair.second._orig_ids)
-          // local index                                              // rank
-      if (local_index_pair.second >= static_cast<unsigned int>(counts[local_index_pair.first]))
-        counts[local_index_pair.first] = local_index_pair.second + 1;
-  }
-
-  unsigned int globalsize = 0;
-  std::vector<int> offsets(_n_procs);
-  for (auto i = decltype(_n_procs)(0); i < _n_procs; ++i)
-  {
-    offsets[i] = globalsize;
-    globalsize += counts[i];
-  }
-
-  local_to_global_all.resize(globalsize);
-
-  for (const auto & grain_pair : _unique_grains)
-  {
-    if (grain_pair.second._status == Status::INACTIVE)
-      continue;
-
-    // Get the local indicies from the feature and build a map
-    for (const auto & local_index_pair : grain_pair.second._orig_ids)
-    {
-      mooseAssert(local_index_pair.first < _n_procs, local_index_pair.first << ", " << _n_procs);
-                                  // rank                   // local index
-      auto global_index = offsets[local_index_pair.first] + local_index_pair.second;
-
-      mooseAssert(global_index < globalsize, "Global index: " << global_index << " is out of range");
-
-      // Finally fill in the vector
-      local_to_global_all[global_index] = grain_pair.first;
-    }
-  }
+  return new_ids;
 }
 
 void
@@ -648,7 +726,10 @@ GrainTracker::remapGrains()
    * It's declared here before we enter the root scope
    * since it's needed by all ranks during the broadcast.
    */
-  std::map<unsigned int, unsigned int> unique_id_to_new_var;
+  std::map<unsigned int, std::size_t> grain_id_to_new_var;
+
+  // Items are added to this list when split grains are found
+  std::list<std::pair<std::size_t, std::size_t>> split_pairs;
 
   /**
    * The remapping algorithm is recursive. We will use the status variable in each FeatureData
@@ -660,15 +741,47 @@ GrainTracker::remapGrains()
    */
   if (_is_master)
   {
-    std::vector<unsigned int> grain_id_to_existing_var_idx(_unique_grains.size(), std::numeric_limits<unsigned int>::max());
-    for (auto & grain_pair : _unique_grains)
+    // Build the map to detect difference in _var_index mappings after the remap operation
+    std::map<unsigned int, std::size_t> grain_id_to_existing_var_index;
+    for (auto & grain : _feature_sets)
     {
-      mooseAssert(!(grain_pair.second._status == Status::CLEAR), "Grain " << grain_pair.first << " status in wrong state.");
+      // Unmark the grain so it can be used in the remap loop
+      grain._status = Status::CLEAR;
 
-      if (grain_pair.second._status == Status::MARKED)
+      grain_id_to_existing_var_index[grain._id] = grain._var_index;
+    }
+
+    // Make sure that all split pieces of any grain are on the same OP
+    for (auto i = beginIndex(_feature_sets); i < _feature_sets.size(); ++i)
+    {
+      auto & grain1 = _feature_sets[i];
+
+      for (auto j = beginIndex(_feature_sets); j < _feature_sets.size(); ++j)
       {
-        grain_pair.second._status = Status::CLEAR;
-        grain_id_to_existing_var_idx[grain_pair.first] = grain_pair.second._var_idx;
+        auto & grain2 = _feature_sets[j];
+        if (i == j)
+          continue;
+
+        // The first condition below is there to prevent symmetric checks (duplicate values)
+        if (i < j && grain1._id == grain2._id)
+        {
+          split_pairs.push_front(std::make_pair(i, j));
+          if (grain1._var_index != grain2._var_index)
+          {
+            _console << COLOR_YELLOW << "Split Grain (#" << grain1._id
+                     << ") detected on unmatched OPs (" << grain1._var_index << ", "
+                     << grain2._var_index << ") attempting to remap to " << grain1._var_index
+                     << ".\n"
+                     << COLOR_DEFAULT;
+
+            /**
+             * We're not going to try very hard to look for a suitable remapping. Just set it to
+             * what we want and hope it all works out. Make the GrainTracker great again!
+             */
+            grain1._var_index = grain2._var_index;
+            grain1._status |= Status::DIRTY;
+          }
+        }
       }
     }
 
@@ -680,81 +793,101 @@ GrainTracker::remapGrains()
     do
     {
       grains_remapped = false;
-      for (auto grain_it1 = _unique_grains.begin(); grain_it1 != _unique_grains.end(); ++grain_it1)
+      for (auto & grain1 : _feature_sets)
       {
-        if (grain_it1->second._status == Status::INACTIVE)
-          continue;
-
         // We need to remap any grains represented on any variable index above the cuttoff
-        if (grain_it1->second._var_idx >= _reserve_op_idx)
+        if (grain1._var_index >= _reserve_op_index)
         {
-          _console
-            << COLOR_YELLOW
-            << "Grain #" << grain_it1->first << " detected on a reserved order parameter #" << grain_it1->second._var_idx << ", remapping to another variable\n"
-            << COLOR_DEFAULT;
+          _console << COLOR_YELLOW << "\nGrain #" << grain1._id
+                   << " detected on a reserved order parameter #" << grain1._var_index
+                   << ", remapping to another variable\n"
+                   << COLOR_DEFAULT;
 
-          for (auto max = decltype(_max_renumbering_recursion)(0); max <= _max_renumbering_recursion; ++max)
+          for (auto max = decltype(_max_renumbering_recursion)(0);
+               max <= _max_renumbering_recursion;
+               ++max)
             if (max < _max_renumbering_recursion)
             {
-              if (attemptGrainRenumber(grain_it1->second, grain_it1->first, 0, max))
+              if (attemptGrainRenumber(grain1, 0, max))
                 break;
             }
-            else if (!attemptGrainRenumber(grain_it1->second, grain_it1->first, 0, max))
-              mooseError(COLOR_RED << "Unable to find any suitable order parameters for remapping. Perhaps you need more op variables?\n\n" << COLOR_DEFAULT);
+            else if (!attemptGrainRenumber(grain1, 0, max))
+            {
+              _console << std::flush;
+              mooseError(COLOR_RED,
+                         "Unable to find any suitable order parameters for remapping."
+                         " Perhaps you need more op variables?\n\n",
+                         COLOR_DEFAULT);
+            }
 
           grains_remapped = true;
         }
 
-        for (auto grain_it2 = _unique_grains.begin(); grain_it2 != _unique_grains.end(); ++grain_it2)
+        for (auto & grain2 : _feature_sets)
         {
           // Don't compare a grain with itself and don't try to remap inactive grains
-          if (grain_it1 == grain_it2 || grain_it2->second._status == Status::INACTIVE)
+          if (&grain1 == &grain2)
             continue;
 
-          if (grain_it1->second._var_idx == grain_it2->second._var_idx &&     // Are the grains represented by the same variable?
-              grain_it1->second.boundingBoxesIntersect(grain_it2->second) &&  // If so, do their bboxes intersect (coarse level check)?
-              grain_it1->second.halosIntersect(grain_it2->second))            // If so, do they actually overlap (tight "hull" check)?
+          if (grain1._var_index == grain2._var_index && // grains represented by same variable?
+              grain1._id != grain2._id &&               // are they part of different grains?
+              grain1.boundingBoxesIntersect(grain2) &&  // do bboxes intersect (coarse level)?
+              grain1.halosIntersect(grain2))            // do they actually overlap (fine level)?
           {
-            _console
-              << COLOR_YELLOW
-              << "Grain #" << grain_it1->first << " intersects Grain #" << grain_it2->first
-              << " (variable index: " << grain_it1->second._var_idx << ")\n"
-              << COLOR_DEFAULT;
+            _console << COLOR_YELLOW << "\nGrain #" << grain1._id << " intersects Grain #"
+                     << grain2._id << " (variable index: " << grain1._var_index << ")\n"
+                     << COLOR_DEFAULT;
 
-            for (auto max = decltype(_max_renumbering_recursion)(0); max <= _max_renumbering_recursion; ++max)
+            for (auto max = decltype(_max_renumbering_recursion)(0);
+                 max <= _max_renumbering_recursion;
+                 ++max)
               if (max < _max_renumbering_recursion)
               {
-                if (attemptGrainRenumber(grain_it1->second, grain_it1->first, 0, max) || attemptGrainRenumber(grain_it2->second, grain_it2->first, 0, max))
+                if (attemptGrainRenumber(grain1, 0, max))
                   break;
               }
-              else if (!attemptGrainRenumber(grain_it1->second, grain_it1->first, 0, max) && !attemptGrainRenumber(grain_it2->second, grain_it2->first, 0, max))
-                mooseError(COLOR_RED << "Unable to find any suitable order parameters for remapping. Perhaps you need more op variables?\n\n" << COLOR_DEFAULT);
+              else if (!attemptGrainRenumber(grain1, 0, max) &&
+                       !attemptGrainRenumber(grain2, 0, max))
+              {
+                _console << std::flush;
+                mooseError(COLOR_RED,
+                           "Unable to find any suitable order parameters for remapping."
+                           " Perhaps you need more op variables?\n\n",
+                           COLOR_DEFAULT);
+              }
 
             grains_remapped = true;
           }
         }
       }
       any_grains_remapped |= grains_remapped;
-    }
-    while (grains_remapped);
+    } while (grains_remapped);
+
+    // Verify that split grains are still intact
+    for (auto & split_pair : split_pairs)
+      if (_feature_sets[split_pair.first]._var_index != _feature_sets[split_pair.first]._var_index)
+        mooseError("Split grain remapped - This case is currently not handled");
 
     /**
      * The remapping loop is complete but only on the master process.
      * Now we need to build the remap map and communicate it to the
      * remaining processors.
      */
-    for (auto & grain_pair : _unique_grains)
+    for (auto & grain : _feature_sets)
     {
-      auto & grain = grain_pair.second;
-      auto old_var_idx = grain_id_to_existing_var_idx[grain_pair.first];
+      mooseAssert(grain_id_to_existing_var_index.find(grain._id) !=
+                      grain_id_to_existing_var_index.end(),
+                  "Missing unique ID");
 
-      if (grain._status != Status::INACTIVE && old_var_idx != grain._var_idx)
+      auto old_var_index = grain_id_to_existing_var_index[grain._id];
+
+      if (old_var_index != grain._var_index)
       {
-        mooseAssert(old_var_idx != std::numeric_limits<unsigned int>::max(), "old_var_idx in incorrect state");
         mooseAssert(static_cast<bool>(grain._status & Status::DIRTY), "grain status is incorrect");
 
-        unique_id_to_new_var.emplace_hint(unique_id_to_new_var.end(),
-                                          std::pair<unsigned int, unsigned int>(grain_pair.first, grain._var_idx));
+        grain_id_to_new_var.emplace_hint(
+            grain_id_to_new_var.end(),
+            std::pair<unsigned int, std::size_t>(grain._id, grain._var_index));
 
         /**
          * Since the remapping algorithm only runs on the root process,
@@ -764,72 +897,74 @@ GrainTracker::remapGrains()
          * variable indices back to the correct value so that all
          * processors use the same algorithm to remap.
          */
-        grain._var_idx = old_var_idx;
+        grain._var_index = old_var_index;
         // Clear the DIRTY status as well for consistency
         grain._status &= ~Status::DIRTY;
       }
     }
+
+    if (!grain_id_to_new_var.empty())
+    {
+      _console << "\nFinal remapping tally:\n";
+      for (const auto & remap_pair : grain_id_to_new_var)
+        _console << "Grain #" << remap_pair.first << " var_index "
+                 << grain_id_to_existing_var_index[remap_pair.first] << " -> " << remap_pair.second
+                 << '\n';
+      _console << "Communicating swaps with remaining processors..." << std::endl;
+    }
   } // root processor
 
-  _communicator.broadcast(unique_id_to_new_var);
+  // Communicate the std::map to all ranks
+  _communicator.broadcast(grain_id_to_new_var);
 
   // Perform swaps if any occurred
-  if (!unique_id_to_new_var.empty())
+  if (!grain_id_to_new_var.empty())
   {
-    _console << "Communicating swaps with remaining processors\n";
-
-      // Cache for holding values during swaps
-    std::vector<std::map<Node *, CacheValues> > cache(_n_vars);
+    // Cache for holding values during swaps
+    std::vector<std::map<Node *, CacheValues>> cache(_n_vars);
 
     // Perform the actual swaps on all processors
-    for (const auto & new_var_pair : unique_id_to_new_var)
+    for (auto & grain : _feature_sets)
     {
-      // See if this processor has a record for this grain, if not continue
-      if (_unique_grains.find(new_var_pair.first) == _unique_grains.end())
-        continue;
-
-      auto & grain = _unique_grains[new_var_pair.first];
-      auto new_var_idx = new_var_pair.second;
-
-      swapSolutionValues(grain, new_var_idx, cache, RemapCacheMode::FILL);
+      // See if this grain was remapped
+      auto new_var_it = grain_id_to_new_var.find(grain._id);
+      if (new_var_it != grain_id_to_new_var.end())
+        swapSolutionValues(grain, new_var_it->second, cache, RemapCacheMode::FILL);
     }
 
-    for (const auto & new_var_pair : unique_id_to_new_var)
+    for (auto & grain : _feature_sets)
     {
-      // See if this processor has a record for this grain, if not continue
-      if (_unique_grains.find(new_var_pair.first) == _unique_grains.end())
-        continue;
-
-      auto & grain = _unique_grains[new_var_pair.first];
-      auto new_var_idx = new_var_pair.second;
-
-      swapSolutionValues(grain, new_var_idx, cache, RemapCacheMode::USE);
+      // See if this grain was remapped
+      auto new_var_it = grain_id_to_new_var.find(grain._id);
+      if (new_var_it != grain_id_to_new_var.end())
+        swapSolutionValues(grain, new_var_it->second, cache, RemapCacheMode::USE);
     }
-    _console << "Swaps complete\n";
 
     _nl.solution().close();
     _nl.solutionOld().close();
     _nl.solutionOlder().close();
 
-    _fe_problem.getNonlinearSystem().sys().update();
+    _fe_problem.getNonlinearSystemBase().system().update();
+
+    _console << "Swaps complete" << std::endl;
   }
 }
 
 void
 GrainTracker::computeMinDistancesFromGrain(FeatureData & grain,
-                                           std::vector<std::list<GrainDistance> > & min_distances)
+                                           std::vector<std::list<GrainDistance>> & min_distances)
 {
   /**
-   *  In the diagram below assume we have 4 order parameters. The grain with the asterisk needs to be
-   *  remapped. All order parameters are used in neighboring grains. For all "touching" grains, the value
-   *  of the corresponding entry in min_distances will be a negative integer representing the number of
-   *  immediate neighbors with that order parameter.
+   * In the diagram below assume we have 4 order parameters. The grain with the asterisk needs to
+   * be remapped. All order parameters are used in neighboring grains. For all "touching" grains,
+   * the value of the corresponding entry in min_distances will be a negative integer representing
+   * the number of immediate neighbors with that order parameter.
+   *
    *  Note: Only the first member of the pair (the distance) is shown in the array below.
+   *        e.g. [-2.0, -max, -1.0, -2.0]
    *
-   *  e.g. [-2.0, -max, -1.0, -2.0]
-   *
-   *  After sorting, variable index 2 (value: -1.0) be at the end of the array and will be the first variable
-   *  we attempt to renumber the current grain to.
+   * After sorting, variable index 2 (value: -1.0) be at the end of the array and will be the first
+   * variable we attempt to renumber the current grain to.
    *
    *        __       ___
    *          \  0  /   \
@@ -842,18 +977,21 @@ GrainTracker::computeMinDistancesFromGrain(FeatureData & grain,
    *        __/  0  \___/
    *
    */
-  for (auto & grain_pair : _unique_grains)
+  for (auto i = beginIndex(_feature_sets); i < _feature_sets.size(); ++i)
   {
-    if (grain_pair.second._status == Status::INACTIVE || grain_pair.second._var_idx == grain._var_idx ||
-        (grain_pair.second._var_idx >= _reserve_op_idx))
+    auto & other_grain = _feature_sets[i];
+
+    if (other_grain._var_index == grain._var_index || other_grain._var_index >= _reserve_op_index)
       continue;
 
-    unsigned int target_var_index = grain_pair.second._var_idx;
-    unsigned int target_grain_id = grain_pair.first;
+    auto target_var_index = other_grain._var_index;
+    auto target_grain_index = i;
+    auto target_grain_id = other_grain._id;
 
-    Real curr_bbox_diff = boundingRegionDistance(grain._bboxes, grain_pair.second._bboxes);
+    Real curr_bbox_diff = boundingRegionDistance(grain._bboxes, other_grain._bboxes);
 
-    GrainDistance grain_distance_obj(curr_bbox_diff, target_grain_id, target_var_index);
+    GrainDistance grain_distance_obj(
+        curr_bbox_diff, target_var_index, target_grain_index, target_grain_id);
 
     // To handle touching halos we penalize the top pick each time we see another
     if (curr_bbox_diff == -1.0 && !min_distances[target_var_index].empty())
@@ -869,50 +1007,67 @@ GrainTracker::computeMinDistancesFromGrain(FeatureData & grain,
       ++insert_it;
     min_distances[target_var_index].insert(insert_it, grain_distance_obj);
   }
+
+  /**
+   * See if we have any completely open OPs (excluding reserve order parameters) or the order
+   * parameter corresponding to this grain, we need to put them in the list or the grain  tracker
+   * won't realize that those vars are available for remapping.
+   */
+  for (auto var_index = beginIndex(_vars); var_index < _reserve_op_index; ++var_index)
+  {
+    // Don't put an entry in for matching variable indices (i.e. we can't remap to ourselves)
+    if (grain._var_index == var_index)
+      continue;
+
+    if (min_distances[var_index].empty())
+      min_distances[var_index].emplace_front(std::numeric_limits<Real>::max(), var_index);
+  }
 }
 
 bool
-GrainTracker::attemptGrainRenumber(FeatureData & grain, unsigned int grain_id, unsigned int depth, unsigned int max)
+GrainTracker::attemptGrainRenumber(FeatureData & grain, unsigned int depth, unsigned int max_depth)
 {
   // End the recursion of our breadth first search
-  if (depth > max)
+  if (depth > max_depth)
     return false;
 
-  unsigned int curr_var_idx = grain._var_idx;
+  std::size_t curr_var_index = grain._var_index;
 
-  std::vector<std::map<Node *, CacheValues> > cache;
+  std::vector<std::map<Node *, CacheValues>> cache;
 
-  std::vector<std::list<GrainDistance> > min_distances(_vars.size());
+  std::vector<std::list<GrainDistance>> min_distances(_vars.size());
 
   /**
    * We have two grains that are getting close represented by the same order parameter.
-   * We need to map to the variable whose closest grain to this one is furthest away by bounding region to
-   * bounding region distance.
+   * We need to map to the variable whose closest grain to this one is furthest away by bounding
+   * region to bounding region distance.
    */
   computeMinDistancesFromGrain(grain, min_distances);
 
   /**
    * We have a vector of the distances to the closest grains represented by each of our variables.
-   * We just need to pick a suitable grain to replace with. We will start with the maximum of this this
-   * list: (max of the mins), but will settle for next to largest and so forth as we make more attempts
-   * at remapping grains. This is a graph coloring problem so more work will be required to optimize
-   * this process.
+   * We just need to pick a suitable grain to replace with. We will start with the maximum of this
+   * this list: (max of the mins), but will settle for next to largest and so forth as we make more
+   * attempts at remapping grains. This is a graph coloring problem so more work will be required
+   * to optimize this process.
    *
-   * Note: We don't have an explicit check here to avoid remapping a  variable to itself.  This is
+   * Note: We don't have an explicit check here to avoid remapping a variable to itself. This is
    * unnecessary since the min_distance of a variable is explicitly set up above.
    */
+  // clang-format off
   std::sort(min_distances.begin(), min_distances.end(),
             [](const std::list<GrainDistance> & lhs, const std::list<GrainDistance> & rhs)
-            {
-              // Sort lists in reverse order (largest distance first)
-              // These empty cases are here to make this comparison stable
-              if (lhs.empty())
-                return false;
-              else if (rhs.empty())
-                return true;
-              else
-                return lhs.begin()->_distance > rhs.begin()->_distance;
-            });
+              {
+                // Sort lists in reverse order (largest distance first)
+                // These empty cases are here to make this comparison stable
+                if (lhs.empty())
+                  return false;
+                else if (rhs.empty())
+                  return true;
+                else
+                  return lhs.begin()->_distance > rhs.begin()->_distance;
+              });
+  // clang-format on
 
   for (auto & list_ref : min_distances)
   {
@@ -923,20 +1078,22 @@ GrainTracker::attemptGrainRenumber(FeatureData & grain, unsigned int grain_id, u
     // If the distance is positive we can just remap and be done
     if (target_it->_distance > 0)
     {
-      _console
-        << COLOR_GREEN
-        << "- Depth " << depth << ": Remapping grain #" << grain_id << " from variable index "
-        << curr_var_idx << " to " << target_it->_var_index << " whose closest grain (#"
-        << target_it->_grain_id << ") is at a distance of " << target_it->_distance << "\n"
-        << COLOR_DEFAULT;
+      _console << COLOR_GREEN << "- Depth " << depth << ": Remapping grain #" << grain._id
+               << " from variable index " << curr_var_index << " to " << target_it->_var_index;
+      if (target_it->_distance == std::numeric_limits<Real>::max())
+        _console << " which currently contains zero grains." << COLOR_DEFAULT;
+      else
+        _console << " whose closest grain (#" << target_it->_grain_id << ") is at a distance of "
+                 << target_it->_distance << "\n"
+                 << COLOR_DEFAULT;
 
       grain._status |= Status::DIRTY;
-      grain._var_idx = target_it->_var_index;
+      grain._var_index = target_it->_var_index;
       return true;
     }
 
-    // If the distance isn't positive we just need to make sure that none of the grains represented by the
-    // target variable index would intersect this one if we were to remap
+    // If the distance isn't positive we just need to make sure that none of the grains represented
+    // by the target variable index would intersect this one if we were to remap
     auto next_target_it = target_it;
     bool intersection_hit = false;
     std::ostringstream oss;
@@ -945,9 +1102,9 @@ GrainTracker::attemptGrainRenumber(FeatureData & grain, unsigned int grain_id, u
       if (next_target_it->_distance > 0)
         break;
 
-      mooseAssert(_unique_grains.find(next_target_it->_grain_id) != _unique_grains.end(),
+      mooseAssert(next_target_it->_grain_index < _feature_sets.size(),
                   "Error in indexing target grain in attemptGrainRenumber");
-      FeatureData & next_target_grain = _unique_grains[next_target_it->_grain_id];
+      FeatureData & next_target_grain = _feature_sets[next_target_it->_grain_index];
 
       // If any grains touch we're done here
       if (grain.halosIntersect(next_target_grain))
@@ -960,22 +1117,21 @@ GrainTracker::attemptGrainRenumber(FeatureData & grain, unsigned int grain_id, u
 
     if (!intersection_hit)
     {
-      _console
-        << COLOR_GREEN
-        << "- Depth " << depth << ": Remapping grain #" << grain_id << " from variable index "
-        << curr_var_idx << " to " << target_it->_var_index << " whose closest grain:"
-        << oss.str() << " is inside our bounding box but whose halo(s) are not touching.\n"
-        << COLOR_DEFAULT;
+      _console << COLOR_GREEN << "- Depth " << depth << ": Remapping grain #" << grain._id
+               << " from variable index " << curr_var_index << " to " << target_it->_var_index
+               << " whose closest grain:" << oss.str()
+               << " is inside our bounding box but whose halo(s) are not touching.\n"
+               << COLOR_DEFAULT;
 
       grain._status |= Status::DIRTY;
-      grain._var_idx = target_it->_var_index;
+      grain._var_index = target_it->_var_index;
       return true;
     }
 
     // If we reach this part of the loop, there is no simple renumbering that can be done.
-    mooseAssert(_unique_grains.find(target_it->_grain_id) != _unique_grains.end(),
+    mooseAssert(target_it->_grain_index < _feature_sets.size(),
                 "Error in indexing target grain in attemptGrainRenumber");
-    FeatureData & target_grain = _unique_grains[target_it->_grain_id];
+    FeatureData & target_grain = _feature_sets[target_it->_grain_index];
 
     /**
      * If we get to this case and the best distance is less than -1, we are in big trouble.
@@ -996,16 +1152,15 @@ GrainTracker::attemptGrainRenumber(FeatureData & grain, unsigned int grain_id, u
      * We don't need to mark the status as DIRTY here since the recursion
      * may fail. For now, we'll just add MARKED to the status.
      */
-    grain._var_idx = target_it->_var_index;
+    grain._var_index = target_it->_var_index;
     grain._status |= Status::MARKED;
-    if (attemptGrainRenumber(target_grain, target_it->_grain_id, depth+1, max))
+    if (attemptGrainRenumber(target_grain, depth + 1, max_depth))
     {
       // SUCCESS!
-      _console
-        << COLOR_GREEN
-        << "- Depth " << depth << ": Remapping grain #" << grain_id << " from variable index " << curr_var_idx
-        << " to " << target_it->_var_index << '\n'
-        << COLOR_DEFAULT;
+      _console << COLOR_GREEN << "- Depth " << depth << ": Remapping grain #" << grain._id
+               << " from variable index " << curr_var_index << " to " << target_it->_var_index
+               << '\n'
+               << COLOR_DEFAULT;
 
       // Now we need to mark the grain as DIRTY since the recursion succeeded.
       grain._status |= Status::DIRTY;
@@ -1013,9 +1168,10 @@ GrainTracker::attemptGrainRenumber(FeatureData & grain, unsigned int grain_id, u
     }
     else
       // FAILURE, We need to set our var index back after failed recursive step
-      grain._var_idx = curr_var_idx;
+      grain._var_index = curr_var_index;
 
-    // ALWAYS "unmark" (or clear the MARKED status) after recursion so it can be used by other remap operations
+    // ALWAYS "unmark" (or clear the MARKED status) after recursion so it can be used by other remap
+    // operations
     grain._status &= ~Status::MARKED;
   }
 
@@ -1023,7 +1179,9 @@ GrainTracker::attemptGrainRenumber(FeatureData & grain, unsigned int grain_id, u
 }
 
 void
-GrainTracker::swapSolutionValues(FeatureData & grain, unsigned int new_var_idx, std::vector<std::map<Node *, CacheValues> > & cache,
+GrainTracker::swapSolutionValues(FeatureData & grain,
+                                 std::size_t new_var_index,
+                                 std::vector<std::map<Node *, CacheValues>> & cache,
                                  RemapCacheMode cache_mode)
 {
   MeshBase & mesh = _mesh.getMesh();
@@ -1043,23 +1201,28 @@ GrainTracker::swapSolutionValues(FeatureData & grain, unsigned int new_var_idx, 
         Node * curr_node = elem->get_node(i);
         if (updated_nodes_tmp.find(curr_node) == updated_nodes_tmp.end())
         {
-          updated_nodes_tmp.insert(curr_node); // cache this node so we don't attempt to remap it again within this loop
-          swapSolutionValuesHelper(curr_node, grain._var_idx, new_var_idx, cache, cache_mode);
+          // cache this node so we don't attempt to remap it again within this loop
+          updated_nodes_tmp.insert(curr_node);
+          swapSolutionValuesHelper(curr_node, grain._var_index, new_var_index, cache, cache_mode);
         }
       }
     }
     else
-      swapSolutionValuesHelper(mesh.query_node_ptr(entity), grain._var_idx, new_var_idx, cache, cache_mode);
+      swapSolutionValuesHelper(
+          mesh.query_node_ptr(entity), grain._var_index, new_var_index, cache, cache_mode);
   }
 
   // Update the variable index in the unique grain datastructure after swaps are complete
   if (cache_mode == RemapCacheMode::USE || cache_mode == RemapCacheMode::BYPASS)
-    grain._var_idx = new_var_idx;
+    grain._var_index = new_var_index;
 }
 
 void
-GrainTracker::swapSolutionValuesHelper(Node * curr_node, unsigned int curr_var_idx, unsigned int new_var_idx,
-                                       std::vector<std::map<Node *, CacheValues> > & cache, RemapCacheMode cache_mode)
+GrainTracker::swapSolutionValuesHelper(Node * curr_node,
+                                       std::size_t curr_var_index,
+                                       std::size_t new_var_index,
+                                       std::vector<std::map<Node *, CacheValues>> & cache,
+                                       RemapCacheMode cache_mode)
 {
   if (curr_node && curr_node->processor_id() == processor_id())
   {
@@ -1067,18 +1230,21 @@ GrainTracker::swapSolutionValuesHelper(Node * curr_node, unsigned int curr_var_i
     _subproblem.reinitNode(curr_node, 0);
 
     // Local variables to hold values being transferred
-    Real current, old, older;
+    Real current, old = 0, older = 0;
     // Retrieve the value either from the old variable or cache
     if (cache_mode == RemapCacheMode::FILL || cache_mode == RemapCacheMode::BYPASS)
     {
-      current = _vars[curr_var_idx]->nodalSln()[0];
-      old = _vars[curr_var_idx]->nodalSlnOld()[0];
-      older = _vars[curr_var_idx]->nodalSlnOlder()[0];
+      current = _vars[curr_var_index]->nodalSln()[0];
+      if (_is_transient)
+      {
+        old = _vars[curr_var_index]->nodalSlnOld()[0];
+        older = _vars[curr_var_index]->nodalSlnOlder()[0];
+      }
     }
     else // USE
     {
-      const auto cache_it = cache[curr_var_idx].find(curr_node);
-      mooseAssert(cache_it != cache[curr_var_idx].end(), "Error in cache");
+      const auto cache_it = cache[curr_var_index].find(curr_node);
+      mooseAssert(cache_it != cache[curr_var_index].end(), "Error in cache");
       current = cache_it->second.current;
       old = cache_it->second.old;
       older = cache_it->second.older;
@@ -1087,18 +1253,21 @@ GrainTracker::swapSolutionValuesHelper(Node * curr_node, unsigned int curr_var_i
     // Cache the value or use it!
     if (cache_mode == RemapCacheMode::FILL)
     {
-      cache[curr_var_idx][curr_node].current = current;
-      cache[curr_var_idx][curr_node].old = old;
-      cache[curr_var_idx][curr_node].older = older;
+      cache[curr_var_index][curr_node].current = current;
+      cache[curr_var_index][curr_node].old = old;
+      cache[curr_var_index][curr_node].older = older;
     }
     else // USE or BYPASS
     {
-      const auto & dof_index = _vars[new_var_idx]->nodalDofIndex();
+      const auto & dof_index = _vars[new_var_index]->nodalDofIndex();
 
       // Transfer this solution from the old to the current
       _nl.solution().set(dof_index, current);
-      _nl.solutionOld().set(dof_index, old);
-      _nl.solutionOlder().set(dof_index, older);
+      if (_is_transient)
+      {
+        _nl.solutionOld().set(dof_index, old);
+        _nl.solutionOlder().set(dof_index, older);
+      }
     }
 
     /**
@@ -1115,12 +1284,15 @@ GrainTracker::swapSolutionValuesHelper(Node * curr_node, unsigned int curr_var_i
      */
     if (cache_mode == RemapCacheMode::FILL || cache_mode == RemapCacheMode::BYPASS)
     {
-      const auto & dof_index = _vars[curr_var_idx]->nodalDofIndex();
+      const auto & dof_index = _vars[curr_var_index]->nodalDofIndex();
 
       // Set the DOF for the current variable to zero
       _nl.solution().set(dof_index, 0.0);
-      _nl.solutionOld().set(dof_index, 0.0);
-      _nl.solutionOlder().set(dof_index, 0.0);
+      if (_is_transient)
+      {
+        _nl.solutionOld().set(dof_index, 0.0);
+        _nl.solutionOlder().set(dof_index, 0.0);
+      }
     }
   }
 }
@@ -1128,41 +1300,34 @@ GrainTracker::swapSolutionValuesHelper(Node * curr_node, unsigned int curr_var_i
 void
 GrainTracker::updateFieldInfo()
 {
-  // Whether or not we should store and write out volume information
-  bool gather_volumes = _pars.isParamValid("feature_volume_file");
-  if (gather_volumes)
-  {
-    // store volumes per feature
-    _all_feature_volumes.reserve(_unique_grains.size());
-
-    // store totals per variable (or smaller)
-    _total_volume_intersecting_boundary.resize(_single_map_mode || _condense_map_info ? 0 : _maps_size);
-  }
-
   for (auto map_num = decltype(_maps_size)(0); map_num < _maps_size; ++map_num)
     _feature_maps[map_num].clear();
 
-  std::map<unsigned int, Real> tmp_map;
+  std::map<dof_id_type, Real> tmp_map;
   MeshBase & mesh = _mesh.getMesh();
 
-  for (const auto & grain_pair : _unique_grains)
+  for (const auto & grain : _feature_sets)
   {
-    unsigned int curr_var = grain_pair.second._var_idx;
-    unsigned int map_idx = (_single_map_mode || _condense_map_info) ? 0 : curr_var;
+    std::size_t curr_var = grain._var_index;
+    std::size_t map_index = (_single_map_mode || _condense_map_info) ? 0 : curr_var;
 
-    if (grain_pair.second._status == Status::INACTIVE)
-      continue;
-
-    for (auto entity : grain_pair.second._local_ids)
+    for (auto entity : grain._local_ids)
     {
       // Highest variable value at this entity wins
-      Real entity_value = -std::numeric_limits<Real>::max();
+      Real entity_value = std::numeric_limits<Real>::lowest();
       if (_is_elemental)
       {
         const Elem * elem = mesh.elem(entity);
         std::vector<Point> centroid(1, elem->centroid());
-        _fe_problem.reinitElemPhys(elem, centroid, 0);
-        entity_value = _vars[curr_var]->sln()[0];
+        if (_poly_ic_uo && _first_time)
+        {
+          entity_value = _poly_ic_uo->getVariableValue(grain._var_index, centroid[0]);
+        }
+        else
+        {
+          _fe_problem.reinitElemPhys(elem, centroid, 0);
+          entity_value = _vars[curr_var]->sln()[0];
+        }
       }
       else
       {
@@ -1170,31 +1335,41 @@ GrainTracker::updateFieldInfo()
         entity_value = _vars[curr_var]->getNodalValue(node);
       }
 
-      if (tmp_map.find(entity) == tmp_map.end() || entity_value > tmp_map[entity])
+      if (entity_value != std::numeric_limits<Real>::lowest() &&
+          (tmp_map.find(entity) == tmp_map.end() || entity_value > tmp_map[entity]))
       {
-        // TODO: Add an option for EBSD Reader
-        _feature_maps[map_idx][entity] = _ebsd_reader ? _unique_grain_to_ebsd_num[grain_pair.first] : grain_pair.first;
+        mooseAssert(grain._id != invalid_id, "Missing Grain ID");
+        _feature_maps[map_index][entity] = grain._id;
+
         if (_var_index_mode)
-          _var_index_maps[map_idx][entity] = grain_pair.second._var_idx;
+          _var_index_maps[map_index][entity] = grain._var_index;
 
         tmp_map[entity] = entity_value;
+      }
+
+      if (_compute_var_to_feature_map)
+      {
+        auto insert_pair = moose_try_emplace(
+            _entity_var_to_features, entity, std::vector<unsigned int>(_n_vars, invalid_id));
+        auto & vec_ref = insert_pair.first->second;
+
+        if (insert_pair.second)
+        {
+          // insert the reserve op numbers (if appropriate)
+          for (auto reserve_index = decltype(_n_reserve_ops)(0); reserve_index < _n_reserve_ops;
+               ++reserve_index)
+            vec_ref[reserve_index] = _reserve_grain_first_index + reserve_index;
+        }
+        vec_ref[grain._var_index] = grain._id;
       }
     }
 
     if (_compute_halo_maps)
-      for (auto entity : grain_pair.second._halo_ids)
-        _halo_ids[grain_pair.second._var_idx][entity] = grain_pair.second._var_idx;
+      for (auto entity : grain._halo_ids)
+        _halo_ids[grain._var_index][entity] = grain._var_index;
 
-    for (auto entity : grain_pair.second._ghosted_ids)
+    for (auto entity : grain._ghosted_ids)
       _ghosted_entity_ids[entity] = 1;
-
-    // Save off volume information (no sort required)
-    if (gather_volumes)
-    {
-      _all_feature_volumes.push_back(grain_pair.second._volume);
-      if (grain_pair.second._intersects_boundary)
-        _total_volume_intersecting_boundary[map_idx] += grain_pair.second._volume;
-    }
   }
 
   communicateHaloMap();
@@ -1205,24 +1380,23 @@ GrainTracker::communicateHaloMap()
 {
   if (_compute_halo_maps)
   {
-    //rank               var_idx        entity_id
-    std::vector<std::pair<unsigned int, dof_id_type> > halo_ids_all;
+    // rank               var_index    entity_id
+    std::vector<std::pair<std::size_t, dof_id_type>> halo_ids_all;
 
-    // TODO: Remove size one vectors after next libMesh update
-    std::vector<int> counts(1);
-    std::vector<std::pair<unsigned int, dof_id_type> > local_halo_ids(1, std::make_pair(0, 0));
+    std::vector<int> counts;
+    std::vector<std::pair<std::size_t, dof_id_type>> local_halo_ids;
     std::size_t counter = 0;
 
     if (_is_master)
     {
-      std::vector<std::vector<std::pair<unsigned int, dof_id_type> > > root_halo_ids(_n_procs);
+      std::vector<std::vector<std::pair<std::size_t, dof_id_type>>> root_halo_ids(_n_procs);
       counts.resize(_n_procs);
 
       auto & mesh = _mesh.getMesh();
       // Loop over the _halo_ids "field" and build minimal lists for all of the other ranks
-      for (auto var_idx = beginIndex(_halo_ids); var_idx < _halo_ids.size(); ++var_idx)
+      for (auto var_index = beginIndex(_halo_ids); var_index < _halo_ids.size(); ++var_index)
       {
-        for (const auto & entity_pair : _halo_ids[var_idx])
+        for (const auto & entity_pair : _halo_ids[var_index])
         {
           DofObject * halo_entity;
           if (_is_elemental)
@@ -1230,7 +1404,8 @@ GrainTracker::communicateHaloMap()
           else
             halo_entity = &mesh.node(entity_pair.first);
 
-          root_halo_ids[halo_entity->processor_id()].push_back(std::make_pair(var_idx, entity_pair.first));
+          root_halo_ids[halo_entity->processor_id()].push_back(
+              std::make_pair(var_index, entity_pair.first));
         }
       }
 
@@ -1251,14 +1426,15 @@ GrainTracker::communicateHaloMap()
       _halo_ids[halo_pair.first].emplace(std::make_pair(halo_pair.second, halo_pair.first));
 
     // Finally remove halo markings from stitch regions
-    for (const auto & grain_pair : _unique_grains)
-      for (auto local_id : grain_pair.second._local_ids)
-        _halo_ids[grain_pair.second._var_idx].erase(local_id);
+    for (const auto & grain : _feature_sets)
+      for (auto local_id : grain._local_ids)
+        _halo_ids[grain._var_index].erase(local_id);
   }
 }
 
 Real
-GrainTracker::centroidRegionDistance(std::vector<MeshTools::BoundingBox> & bboxes1, std::vector<MeshTools::BoundingBox> bboxes2) const
+GrainTracker::centroidRegionDistance(std::vector<MeshTools::BoundingBox> & bboxes1,
+                                     std::vector<MeshTools::BoundingBox> & bboxes2) const
 {
   /**
    * Find the minimum centroid distance between any to pieces of the grains.
@@ -1284,13 +1460,14 @@ GrainTracker::centroidRegionDistance(std::vector<MeshTools::BoundingBox> & bboxe
 }
 
 Real
-GrainTracker::boundingRegionDistance(std::vector<MeshTools::BoundingBox> & bboxes1, std::vector<MeshTools::BoundingBox> bboxes2) const
+GrainTracker::boundingRegionDistance(std::vector<MeshTools::BoundingBox> & bboxes1,
+                                     std::vector<MeshTools::BoundingBox> & bboxes2) const
 {
   /**
-   * The region that each grain covers is represented by a bounding box large enough to encompassing all the points
-   * within that grain. When using periodic boundaries, we may have several discrete "pieces" of a grain each represented
-   * by a bounding box. The distance between any two grains is defined as the minimum distance between any pair of boxes,
-   * one selected from each grain.
+   * The region that each grain covers is represented by a bounding box large enough to encompassing
+   * all the points within that grain. When using periodic boundaries, we may have several discrete
+   * "pieces" of a grain each represented by a bounding box. The distance between any two grains
+   * is defined as the minimum distance between any pair of boxes, one selected from each grain.
    */
   auto min_distance = std::numeric_limits<Real>::max();
   for (const auto & bbox1 : bboxes1)
@@ -1332,20 +1509,38 @@ GrainTracker::boundingRegionDistance(std::vector<MeshTools::BoundingBox> & bboxe
   return min_distance;
 }
 
+unsigned int
+GrainTracker::getNextUniqueID()
+{
+  /**
+   * Get the next unique grain ID but make sure to respect
+   * reserve ids. Note, that the first valid ID for a new
+   * grain is _reserve_grain_first_index + _n_reserve_ops because
+   * _reserve_grain_first_index IS a valid index. It does not
+   * point to the last valid index of the non-reserved grains.
+   */
+  _max_curr_grain_id = std::max(_max_curr_grain_id + 1,
+                                _reserve_grain_first_index + _n_reserve_ops /* no +1 here!*/);
+
+  return _max_curr_grain_id;
+}
+
 /*************************************************
  ************** Helper Structures ****************
  ************************************************/
-GrainDistance::GrainDistance() :
-    _distance(std::numeric_limits<Real>::max()),
-    _grain_id(std::numeric_limits<unsigned int>::max()),
-    _var_index(std::numeric_limits<unsigned int>::max())
+GrainDistance::GrainDistance(Real distance, std::size_t var_index)
+  : GrainDistance(distance,
+                  var_index,
+                  std::numeric_limits<std::size_t>::max(),
+                  std::numeric_limits<unsigned int>::max())
 {
 }
 
-GrainDistance::GrainDistance(Real distance, unsigned int grain_id, unsigned int var_index) :
-    _distance(distance),
-    _grain_id(grain_id),
-    _var_index(var_index)
+GrainDistance::GrainDistance(Real distance,
+                             std::size_t var_index,
+                             std::size_t grain_index,
+                             unsigned int grain_id)
+  : _distance(distance), _var_index(var_index), _grain_index(grain_index), _grain_id(grain_id)
 {
 }
 
@@ -1354,5 +1549,3 @@ GrainDistance::operator<(const GrainDistance & rhs) const
 {
   return _distance < rhs._distance;
 }
-
-std::vector<unsigned int> GrainTracker::_empty_2;

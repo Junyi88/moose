@@ -26,10 +26,11 @@ class AB2PredictorCorrector;
 
 namespace libMesh
 {
-template <typename T> class NumericVector;
+template <typename T>
+class NumericVector;
 }
 
-template<>
+template <>
 InputParameters validParams<AB2PredictorCorrector>();
 
 /**
@@ -57,6 +58,7 @@ protected:
   ///
   NumericVector<Number> & _u1;
   NumericVector<Number> & _aux1;
+  NumericVector<Number> & _pred1;
 
   /// dt of the big step
   Real & _dt_full;

@@ -18,10 +18,10 @@
 // Moose Includes
 #include "DiracKernel.h"
 
-//Forward Declarations
+// Forward Declarations
 class ConstantPointSource;
 
-template<>
+template <>
 InputParameters validParams<ConstantPointSource>();
 
 /**
@@ -37,9 +37,9 @@ public:
 protected:
   virtual Real computeQpResidual() override;
 
-  Real _value;
+  const Real & _value;
   std::vector<Real> _point_param;
   Point _p;
 };
 
-#endif //CONSTANTPOINTSOURCE_H
+#endif // CONSTANTPOINTSOURCE_H

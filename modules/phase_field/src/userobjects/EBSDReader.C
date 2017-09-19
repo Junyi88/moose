@@ -9,19 +9,26 @@
 #include "EBSDMesh.h"
 #include "MooseMesh.h"
 #include "Conversion.h"
+#include "NonlinearSystem.h"
 
-template<>
-InputParameters validParams<EBSDReader>()
+#include <fstream>
+
+template <>
+InputParameters
+validParams<EBSDReader>()
 {
   InputParameters params = validParams<EulerAngleProvider>();
-  params.addParam<unsigned int>("custom_columns", 0, "Number of additional custom data columns to read from the EBSD file");
+  params.addClassDescription("Load and manage DREAM.3D EBSD data files for running simulations on "
+                             "reconstructed microstructures.");
+  params.addParam<unsigned int>(
+      "custom_columns", 0, "Number of additional custom data columns to read from the EBSD file");
   return params;
 }
 
-EBSDReader::EBSDReader(const InputParameters & params) :
-    EulerAngleProvider(params),
+EBSDReader::EBSDReader(const InputParameters & params)
+  : EulerAngleProvider(params),
     _mesh(_fe_problem.mesh()),
-    _nl(_fe_problem.getNonlinearSystem()),
+    _nl(_fe_problem.getNonlinearSystemBase()),
     _grain_num(0),
     _custom_columns(getParam<unsigned int>("custom_columns")),
     _time_step(_fe_problem.timeStep()),
@@ -50,7 +57,7 @@ EBSDReader::readFile()
 
   std::ifstream stream_in(mesh->getEBSDFilename().c_str());
   if (!stream_in)
-    mooseError("Can't open EBSD file: " << mesh->getEBSDFilename());
+    mooseError("Can't open EBSD file: ", mesh->getEBSDFilename());
 
   const EBSDMesh::EBSDMeshGeometry & g = mesh->getEBSDGeometry();
 
@@ -71,7 +78,7 @@ EBSDReader::readFile()
   _maxz = _minz + _dz * _nz;
 
   // Resize the _data array
-  unsigned total_size = g.dim < 3 ? _nx*_ny : _nx*_ny*_nz;
+  unsigned total_size = g.dim < 3 ? _nx * _ny : _nx * _ny * _nz;
   _data.resize(total_size);
 
   std::string line;
@@ -84,7 +91,8 @@ EBSDReader::readFile()
       Real x, y, z;
 
       std::istringstream iss(line);
-      iss >> d._phi1 >> d._Phi >> d._phi2 >> x >> y >> z >> d._feature_id >> d._phase >> d._symmetry;
+      iss >> d._phi1 >> d._Phi >> d._phi2 >> x >> y >> z >> d._feature_id >> d._phase >>
+          d._symmetry;
 
       // Transform angles to degrees
       d._phi1 *= 180.0 / libMesh::pi;
@@ -95,10 +103,26 @@ EBSDReader::readFile()
       d._custom.resize(_custom_columns);
       for (unsigned int i = 0; i < _custom_columns; ++i)
         if (!(iss >> d._custom[i]))
-          mooseError("Unable to read in EBSD custom data column #" << i);
+          mooseError("Unable to read in EBSD custom data column #", i);
 
-      if (x < _minx || y < _miny || x > _maxx || y > _maxy || (g.dim == 3 && (z < _minz || z > _maxz)))
-        mooseError("EBSD Data ouside of the domain declared in the header ([" << _minx << ':' << _maxx << "], [" << _miny << ':' << _maxy << "], [" << _minz << ':' << _maxz << "]) dim=" << g.dim << "\n" << line);
+      if (x < _minx || y < _miny || x > _maxx || y > _maxy ||
+          (g.dim == 3 && (z < _minz || z > _maxz)))
+        mooseError("EBSD Data ouside of the domain declared in the header ([",
+                   _minx,
+                   ':',
+                   _maxx,
+                   "], [",
+                   _miny,
+                   ':',
+                   _maxy,
+                   "], [",
+                   _minz,
+                   ':',
+                   _maxz,
+                   "]) dim=",
+                   g.dim,
+                   "\n",
+                   line);
 
       d._p = Point(x, y, z);
 
@@ -134,22 +158,20 @@ EBSDReader::readFile()
     EBSDAvgData & a = _avg_data[_global_id_map[j._feature_id]];
     EulerAngles & b = _avg_angles[_global_id_map[j._feature_id]];
 
-    //use Eigen::Quaternion<Real> here?
+    // use Eigen::Quaternion<Real> here?
     b.phi1 += j._phi1;
-    b.Phi  += j._Phi;
+    b.Phi += j._Phi;
     b.phi2 += j._phi2;
 
     if (a._n == 0)
       a._phase = j._phase;
-    else
-      if (a._phase != j._phase)
-        mooseError("An EBSD feature needs to have a uniform phase.");
+    else if (a._phase != j._phase)
+      mooseError("An EBSD feature needs to have a uniform phase.");
 
     if (a._n == 0)
       a._symmetry = j._symmetry;
-    else
-      if (a._symmetry != j._symmetry)
-        mooseError("An EBSD feature needs to have a uniform symmetry parameter.");
+    else if (a._symmetry != j._symmetry)
+      mooseError("An EBSD feature needs to have a uniform symmetry parameter.");
 
     for (unsigned int i = 0; i < _custom_columns; ++i)
       a._custom[i] += j._custom[i];
@@ -166,11 +188,12 @@ EBSDReader::readFile()
     EBSDAvgData & a = _avg_data[i];
     EulerAngles & b = _avg_angles[i];
 
-    if (a._n == 0) continue;
+    if (a._n == 0)
+      continue;
 
     // TODO: need better way to average angles
     b.phi1 /= Real(a._n);
-    b.Phi  /= Real(a._n);
+    b.Phi /= Real(a._n);
     b.phi2 /= Real(a._n);
 
     // link the EulerAngles into the EBSDAvgData for access via the functors
@@ -195,9 +218,7 @@ EBSDReader::readFile()
   buildNodeWeightMaps();
 }
 
-EBSDReader::~EBSDReader()
-{
-}
+EBSDReader::~EBSDReader() {}
 
 const EBSDReader::EBSDPointData &
 EBSDReader::getData(const Point & p) const
@@ -258,7 +279,8 @@ EBSDReader::indexFromPoint(const Point & p) const
   global_index = (global_index + y_index) * _nx + x_index;
 
   // Don't access out of range!
-  mooseAssert(global_index < _data.size(), "global_index points out of _data range");
+  mooseAssert(global_index < _data.size(),
+              "global_index " << global_index << " points out of _data range: " << _data.size());
 
   return global_index;
 }
@@ -272,18 +294,21 @@ EBSDReader::indexFromIndex(unsigned int var) const
 
   // Don't access out of range!
   if (avg_index >= _avg_data.size())
-    mooseError("Error! Index out of range in EBSDReader::indexFromIndex()");
+    mooseError("Error! Index out of range in EBSDReader::indexFromIndex(), index: ",
+               avg_index,
+               " size: ",
+               _avg_data.size());
 
   return avg_index;
 }
 
-const std::map<dof_id_type, std::vector<Real> > &
+const std::map<dof_id_type, std::vector<Real>> &
 EBSDReader::getNodeToGrainWeightMap() const
 {
   return _node_to_grain_weight_map;
 }
 
-const std::map<dof_id_type, std::vector<Real> > &
+const std::map<dof_id_type, std::vector<Real>> &
 EBSDReader::getNodeToPhaseWeightMap() const
 {
   return _node_to_phase_weight_map;
@@ -310,13 +335,15 @@ void
 EBSDReader::buildNodeWeightMaps()
 {
   // Import nodeToElemMap from MooseMesh for current node
-  // This map consists of the node index followed by a vector of element indices that are associated with that node
-  std::map<dof_id_type, std::vector<dof_id_type> > & node_to_elem_map = _mesh.nodeToActiveSemilocalElemMap();
-  libMesh::MeshBase &mesh = _mesh.getMesh();
+  // This map consists of the node index followed by a vector of element indices that are associated
+  // with that node
+  const std::map<dof_id_type, std::vector<dof_id_type>> & node_to_elem_map =
+      _mesh.nodeToActiveSemilocalElemMap();
+  libMesh::MeshBase & mesh = _mesh.getMesh();
 
   // Loop through each node in mesh and calculate eta values for each grain associated with the node
-  MeshBase::const_node_iterator ni = mesh.nodes_begin();
-  const MeshBase::const_node_iterator nend = mesh.nodes_end();
+  MeshBase::const_node_iterator ni = mesh.active_nodes_begin();
+  const MeshBase::const_node_iterator nend = mesh.active_nodes_end();
   for (; ni != nend; ++ni)
   {
     // Get node_id
@@ -326,24 +353,31 @@ EBSDReader::buildNodeWeightMaps()
     _node_to_grain_weight_map[node_id].assign(getGrainNum(), 0.0);
     _node_to_phase_weight_map[node_id].assign(getPhaseNum(), 0.0);
 
-    // Loop through element indices associated with the current node and record weighted eta value in new map
-    unsigned int n_elems = node_to_elem_map[node_id].size();  // n_elems can range from 1 to 4 for 2D and 1 to 8 for 3D problems
-
-    for (unsigned int ne = 0; ne < n_elems; ++ne)
+    // Loop through element indices associated with the current node and record weighted eta value
+    // in new map
+    const auto & node_to_elem_pair = node_to_elem_map.find(node_id);
+    if (node_to_elem_pair != node_to_elem_map.end())
     {
-      // Current element index
-      unsigned int elem_id = node_to_elem_map[node_id][ne];
+      unsigned int n_elems =
+          node_to_elem_pair->second
+              .size(); // n_elems can range from 1 to 4 for 2D and 1 to 8 for 3D problems
 
-      // Retrieve EBSD grain number for the current element index
-      const Elem * elem = mesh.elem(elem_id);
-      const EBSDReader::EBSDPointData & d = getData(elem->centroid());
+      for (unsigned int ne = 0; ne < n_elems; ++ne)
+      {
+        // Current element index
+        unsigned int elem_id = (node_to_elem_pair->second)[ne];
 
-      // get the (global) grain ID for the EBSD feature ID
-      const unsigned int global_id = getGlobalID(d._feature_id);
+        // Retrieve EBSD grain number for the current element index
+        const Elem * elem = mesh.elem(elem_id);
+        const EBSDReader::EBSDPointData & d = getData(elem->centroid());
 
-      // Calculate eta value and add to map
-      _node_to_grain_weight_map[node_id][global_id] += 1.0 / n_elems;
-      _node_to_phase_weight_map[node_id][d._phase] += 1.0 / n_elems;
+        // get the (global) grain ID for the EBSD feature ID
+        const unsigned int global_id = getGlobalID(d._feature_id);
+
+        // Calculate eta value and add to map
+        _node_to_grain_weight_map[node_id][global_id] += 1.0 / n_elems;
+        _node_to_phase_weight_map[node_id][d._phase] += 1.0 / n_elems;
+      }
     }
   }
 }

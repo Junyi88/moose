@@ -7,46 +7,34 @@
 #ifndef COMPUTEFINITESTRAIN_H
 #define COMPUTEFINITESTRAIN_H
 
-#include "ComputeStrainBase.h"
+#include "ComputeIncrementalStrainBase.h"
 
 /**
  * ComputeFiniteStrain defines a strain increment and rotation increment, for finite strains.
  */
-class ComputeFiniteStrain : public ComputeStrainBase
+class ComputeFiniteStrain : public ComputeIncrementalStrainBase
 {
 public:
   ComputeFiniteStrain(const InputParameters & parameters);
 
   virtual void computeProperties();
 
+  static MooseEnum decompositionType();
+
 protected:
-  virtual void initQpStatefulProperties();
   virtual void computeQpStrain();
+  virtual void computeQpIncrements(RankTwoTensor & e, RankTwoTensor & r);
 
-  MaterialProperty<RankTwoTensor> & _strain_rate;
-  MaterialProperty<RankTwoTensor> & _strain_increment;
-  MaterialProperty<RankTwoTensor> & _mechanical_strain_old;
-  MaterialProperty<RankTwoTensor> & _total_strain_old;
-  MaterialProperty<RankTwoTensor> & _rotation_increment;
-
-  MaterialProperty<RankTwoTensor> & _deformation_gradient;
-  MaterialProperty<RankTwoTensor> & _deformation_gradient_old;
-
-  const MaterialProperty<RankTwoTensor> & _stress_free_strain_increment;
-   const VariableValue & _T_old; //Deprecated, use ComputeThermalExpansionEigenStrain instead
-
-  const Real & _current_elem_volume;
   std::vector<RankTwoTensor> _Fhat;
 
 private:
-  /// True if this is the first timestep (timestep < 2). At the first
-  /// timestep, the change in temperature should be calculated with the reference
-  /// stress free temperature, not the stateful _temperature_old; this boolean variable
-  /// eliminates the use of the _app.isRestarting() in the soon to be deprecicated
-  /// calculation of thermal expansion strain in this class.
-  /// This boolean is delcared as a reference so that the variable is restartable
-  /// data:  if we restart, the code will not think it is the first timestep again.
-  bool & _step_one;
+  enum class DecompMethod
+  {
+    TaylorExpansion,
+    EigenSolution
+  };
+
+  const DecompMethod _decomposition_method;
 };
 
-#endif //COMPUTEFINITESTRAIN_H
+#endif // COMPUTEFINITESTRAIN_H

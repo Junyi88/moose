@@ -16,14 +16,13 @@
 #define MATERIALPROPERTYDEBUGOUTPUT_H
 
 // MOOSE includes
-#include "BasicOutput.h"
 #include "Output.h"
 
 // Forward declerations
 class MaterialPropertyDebugOutput;
 class Material;
 
-template<>
+template <>
 InputParameters validParams<MaterialPropertyDebugOutput>();
 
 /**
@@ -31,10 +30,9 @@ InputParameters validParams<MaterialPropertyDebugOutput>();
  *
  * This class may be used from inside the [Outputs] block or via the [Debug] block (preferred)
  */
-class MaterialPropertyDebugOutput : public BasicOutput<Output>
+class MaterialPropertyDebugOutput : public Output
 {
 public:
-
   /**
    * Class constructor
    * @param parameters Object input parameters
@@ -42,7 +40,6 @@ public:
   MaterialPropertyDebugOutput(const InputParameters & parameters);
 
 protected:
-
   /**
    * Perform the debugging output
    * For this object this is empty; the output is preformed in the constructor
@@ -59,8 +56,8 @@ protected:
    * @param output The output stream to populate
    * @param materials Vector of pointers to the Material objects of interest
    */
-  void printMaterialProperties(std::stringstream & output, const std::vector<MooseSharedPointer<Material> > & materials) const;
-
+  void printMaterialProperties(std::stringstream & output,
+                               const std::vector<std::shared_ptr<Material>> & materials) const;
 };
 
 #endif // MATERIALPROPERTYEBUGOUTPUT_H

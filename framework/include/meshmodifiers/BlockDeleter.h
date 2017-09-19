@@ -19,7 +19,7 @@
 
 class BlockDeleter;
 
-template<>
+template <>
 InputParameters validParams<BlockDeleter>();
 
 class BlockDeleter : public ElementDeleterBase
@@ -32,7 +32,7 @@ protected:
 
 private:
   ///Defines the block to be removed
-  SubdomainID _block_id;
+  const SubdomainID _block_id;
 };
 
 #endif /* BLOCKDELETER_H */

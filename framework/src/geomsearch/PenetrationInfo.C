@@ -23,18 +23,23 @@
 #include "Moose.h"
 #include "MooseMesh.h"
 
-PenetrationInfo::PenetrationInfo(const Node * node, const Elem * elem, Elem * side, unsigned int side_num,
-                                 RealVectorValue norm, Real norm_distance, Real tangential_distance,
+PenetrationInfo::PenetrationInfo(const Node * node,
+                                 const Elem * elem,
+                                 const Elem * side,
+                                 unsigned int side_num,
+                                 RealVectorValue norm,
+                                 Real norm_distance,
+                                 Real tangential_distance,
                                  const Point & closest_point,
                                  const Point & closest_point_ref,
                                  const Point & closest_point_on_face_ref,
                                  std::vector<const Node *> off_edge_nodes,
-                                 const std::vector<std::vector<Real> > & side_phi,
-                                 const std::vector<std::vector<RealGradient> > & side_grad_phi,
+                                 const std::vector<std::vector<Real>> & side_phi,
+                                 const std::vector<std::vector<RealGradient>> & side_grad_phi,
                                  const std::vector<RealGradient> & dxyzdxi,
                                  const std::vector<RealGradient> & dxyzdeta,
-                                 const std::vector<RealGradient> & d2xyzdxideta) :
-    _node(node),
+                                 const std::vector<RealGradient> & d2xyzdxideta)
+  : _node(node),
     _elem(elem),
     _side(side),
     _side_num(side_num),
@@ -67,8 +72,10 @@ PenetrationInfo::PenetrationInfo(const Node * node, const Elem * elem, Elem * si
     _incremental_slip_prev_iter(0),
     _slip_reversed(false),
     _slip_tol(0)
-{}
+{
+}
 
+/*
 PenetrationInfo::PenetrationInfo(const PenetrationInfo & p)
   : _node(p._node),
     _elem(p._elem),
@@ -104,7 +111,9 @@ PenetrationInfo::PenetrationInfo(const PenetrationInfo & p)
     _incremental_slip_prev_iter(p._incremental_slip_prev_iter),
     _slip_reversed(p._slip_reversed),
     _slip_tol(p._slip_tol)
-{}
+{
+}
+*/
 
 PenetrationInfo::PenetrationInfo()
   : _node(NULL),
@@ -140,16 +149,14 @@ PenetrationInfo::PenetrationInfo()
     _incremental_slip_prev_iter(0),
     _slip_reversed(false),
     _slip_tol(0)
-{}
-
-PenetrationInfo::~PenetrationInfo()
 {
-  delete _side;
 }
 
-template<>
+PenetrationInfo::~PenetrationInfo() { delete _side; }
+
+template <>
 void
-dataStore(std::ostream & stream, PenetrationInfo * & pinfo, void * context)
+dataStore(std::ostream & stream, PenetrationInfo *& pinfo, void * context)
 {
   if (!context)
     mooseError("Can only store PenetrationInfo objects using a MooseMesh context!");
@@ -187,7 +194,8 @@ dataStore(std::ostream & stream, PenetrationInfo * & pinfo, void * context)
     storeHelper(stream, pinfo->_mech_status, context);
     storeHelper(stream, pinfo->_mech_status_old, context);
 
-    // Don't need frictional_energy_old, accumulated_slip_old, contact_force_old, or locked_this_step
+    // Don't need frictional_energy_old, accumulated_slip_old, contact_force_old, or
+    // locked_this_step
     // because they are always set by the constraints at the beginning of a new time step.
   }
   else
@@ -198,9 +206,9 @@ dataStore(std::ostream & stream, PenetrationInfo * & pinfo, void * context)
   }
 }
 
-template<>
+template <>
 void
-dataLoad(std::istream & stream, PenetrationInfo * & pinfo, void * context)
+dataLoad(std::istream & stream, PenetrationInfo *& pinfo, void * context)
 {
   if (!context)
     mooseError("Can only load PenetrationInfo objects using a MooseMesh context!");
@@ -216,7 +224,7 @@ dataLoad(std::istream & stream, PenetrationInfo * & pinfo, void * context)
     loadHelper(stream, pinfo->_elem, context);
     loadHelper(stream, pinfo->_side_num, context);
     // Rebuild the side element.
-    pinfo->_side = pinfo->_elem->build_side(pinfo->_side_num, false).release();
+    pinfo->_side = pinfo->_elem->build_side_ptr(pinfo->_side_num, false).release();
 
     loadHelper(stream, pinfo->_normal, context);
     loadHelper(stream, pinfo->_distance, context);
@@ -241,7 +249,8 @@ dataLoad(std::istream & stream, PenetrationInfo * & pinfo, void * context)
     loadHelper(stream, pinfo->_mech_status, context);
     loadHelper(stream, pinfo->_mech_status_old, context);
 
-    // Don't need frictional_energy_old, accumulated_slip_old, contact_force_old, or locked_this_step
+    // Don't need frictional_energy_old, accumulated_slip_old, contact_force_old, or
+    // locked_this_step
     // because they are always set by the constraints at the beginning of a new time step.
   }
   else

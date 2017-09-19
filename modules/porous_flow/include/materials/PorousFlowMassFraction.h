@@ -10,10 +10,10 @@
 
 #include "PorousFlowMaterialVectorBase.h"
 
-//Forward Declarations
+// Forward Declarations
 class PorousFlowMassFraction;
 
-template<>
+template <>
 InputParameters validParams<PorousFlowMassFraction>();
 
 /**
@@ -26,38 +26,23 @@ public:
   PorousFlowMassFraction(const InputParameters & parameters);
 
 protected:
-  /// Mass fraction matrix
-  MaterialProperty<std::vector<std::vector<Real> > > & _mass_frac;
-
-  /// Old value of mass fraction matrix
-  MaterialProperty<std::vector<std::vector<Real> > > & _mass_frac_old;
+  /// Mass fraction matrix at quadpoint or nodes
+  MaterialProperty<std::vector<std::vector<Real>>> & _mass_frac;
 
   /// Gradient of the mass fraction matrix at the quad points
-  MaterialProperty<std::vector<std::vector<RealGradient> > > & _grad_mass_frac;
+  MaterialProperty<std::vector<std::vector<RealGradient>>> * const _grad_mass_frac;
 
   /// Derivative of the mass fraction matrix with respect to the porous flow variables
-  MaterialProperty<std::vector<std::vector<std::vector<Real> > > > & _dmass_frac_dvar;
+  MaterialProperty<std::vector<std::vector<std::vector<Real>>>> & _dmass_frac_dvar;
 
-  virtual void initQpStatefulProperties();
-  virtual void computeQpProperties();
+  virtual void initQpStatefulProperties() override;
+  virtual void computeQpProperties() override;
 
   /**
    * Builds the mass-fraction variable matrix at the quad point
    * @param qp the quad point
    */
   void build_mass_frac(unsigned int qp);
-
-  /**
-   * YAQI HACK !!!
-   * Since PR#6763 i can often build_mass_frac(_qp) in
-   * initQpStatefulProperties, but sometimes it causes
-   * MOOSE to crash (see, eg, tests/pressure_pulse/pressure_pulse_1d_2phase)
-   * and i need the YaqiHack to get the simulation
-   * to work.  But then other simulations fail, because
-   * the Yaqi Hack doesn't work, boohoo.
-   * This will be removed when we get to the bottom of why ICs aren't working as I had hoped
-   */
-  const bool _yaqi_hacky;
 
   /**
    * Number of mass-fraction variables provided by the user
@@ -77,4 +62,4 @@ protected:
   std::vector<const VariableGradient *> _grad_mf_vars;
 };
 
-#endif //POROUSFLOWMASSFRACTION_H
+#endif // POROUSFLOWMASSFRACTION_H

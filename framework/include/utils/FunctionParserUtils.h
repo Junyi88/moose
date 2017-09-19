@@ -15,25 +15,33 @@
 #ifndef FUNCTIONPARSERUTILS_H
 #define FUNCTIONPARSERUTILS_H
 
-#include "InputParameters.h"
+#include "Moose.h"
+
+#include "libmesh/fparser_ad.hh"
+
+// C++ includes
+#include <memory>
 
 // Forward declartions
 class FunctionParserUtils;
+class InputParameters;
 
-template<>
+template <typename T>
+InputParameters validParams();
+
+template <>
 InputParameters validParams<FunctionParserUtils>();
 
 class FunctionParserUtils
 {
 public:
   FunctionParserUtils(const InputParameters & parameters);
-  FunctionParserUtils(const std::string & /*name*/, InputParameters parameters); // DEPRECATED CONSTRUCTOR
 
   /// Shorthand for an autodiff function parser object.
   typedef FunctionParserADBase<Real> ADFunction;
 
   /// Shorthand for an smart pointer to an autodiff function parser object.
-  typedef MooseSharedPointer<ADFunction> ADFunctionPtr;
+  typedef std::shared_ptr<ADFunction> ADFunctionPtr;
 
   /// apply input paramters to internal feature flags of the parser object
   void setParserFeatureFlags(ADFunctionPtr &);
@@ -65,4 +73,4 @@ protected:
   std::vector<Real> _func_params;
 };
 
-#endif //FUNCTIONPARSERUTILS_H
+#endif // FUNCTIONPARSERUTILS_H

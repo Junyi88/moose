@@ -7,12 +7,12 @@
 #ifndef INSMASS_H
 #define INSMASS_H
 
-#include "Kernel.h"
+#include "INSBase.h"
 
 // Forward Declarations
 class INSMass;
 
-template<>
+template <>
 InputParameters validParams<INSMass>();
 
 /**
@@ -20,29 +20,23 @@ InputParameters validParams<INSMass>();
  * contributions for the incompressible Navier-Stokes momentum
  * equation.
  */
-class INSMass : public Kernel
+class INSMass : public INSBase
 {
 public:
   INSMass(const InputParameters & parameters);
 
-  virtual ~INSMass(){}
+  virtual ~INSMass() {}
 
 protected:
   virtual Real computeQpResidual();
   virtual Real computeQpJacobian();
   virtual Real computeQpOffDiagJacobian(unsigned jvar);
 
-  // Coupled Gradients
-  const VariableGradient & _grad_u_vel;
-  const VariableGradient & _grad_v_vel;
-  const VariableGradient & _grad_w_vel;
+  virtual Real computeQpPGResidual();
+  virtual Real computeQpPGJacobian();
+  virtual Real computeQpPGOffDiagJacobian(unsigned comp);
 
-  // Variable numberings
-  unsigned _u_vel_var_number;
-  unsigned _v_vel_var_number;
-  unsigned _w_vel_var_number;
-  unsigned _p_var_number;
+  bool _pspg;
 };
-
 
 #endif // INSMASS_H

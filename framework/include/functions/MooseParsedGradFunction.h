@@ -21,9 +21,8 @@
 
 // Forward declerations
 class MooseParsedGradFunction;
-class MooseParsedFunctionWrapper;
 
-template<>
+template <>
 InputParameters validParams<MooseParsedGradFunction>();
 
 /**
@@ -33,9 +32,7 @@ InputParameters validParams<MooseParsedGradFunction>();
  * Documentation for the Function Parser can be found at:
  * http://warp.povusers.org/FunctionParser/fparser.html
  */
-class MooseParsedGradFunction :
-  public Function,
-  public MooseParsedFunctionBase
+class MooseParsedGradFunction : public Function, public MooseParsedFunctionBase
 {
 public:
   /**
@@ -45,7 +42,7 @@ public:
   MooseParsedGradFunction(const InputParameters & parameters);
 
   /**
-   * Class destructor
+   * Destructor necessary for std::unique_ptr usage
    */
   virtual ~MooseParsedGradFunction();
 
@@ -77,18 +74,14 @@ public:
   virtual void initialSetup() override;
 
 protected:
-
   /// String for the scalar function string
   std::string _value;
 
   /// String for the gradient, vector function string
   std::string _grad_value;
 
-  /// Pointer to the Parsed function wrapper object for the scalar
-  MooseParsedFunctionWrapper * _function_ptr;
-
   /// Pointer to the Parsed function wrapper object for the gradient
-  MooseParsedFunctionWrapper * _grad_function_ptr;
+  std::unique_ptr<MooseParsedFunctionWrapper> _grad_function_ptr;
 };
 
 #endif // MOOSEPARSEDGRADFUNCTION_H

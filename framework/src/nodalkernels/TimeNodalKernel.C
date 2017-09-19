@@ -13,19 +13,21 @@
 /****************************************************************/
 
 #include "TimeNodalKernel.h"
-#include "Assembly.h"
 
-template<>
-InputParameters validParams<TimeNodalKernel>()
+// MOOSE includes
+#include "Assembly.h"
+#include "MooseVariable.h"
+#include "SystemBase.h"
+
+template <>
+InputParameters
+validParams<TimeNodalKernel>()
 {
   InputParameters params = validParams<NodalKernel>();
   return params;
 }
 
-TimeNodalKernel::TimeNodalKernel(const InputParameters & parameters) :
-    NodalKernel(parameters)
-{
-}
+TimeNodalKernel::TimeNodalKernel(const InputParameters & parameters) : NodalKernel(parameters) {}
 
 void
 TimeNodalKernel::computeResidual()

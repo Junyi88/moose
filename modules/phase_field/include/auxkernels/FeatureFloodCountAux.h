@@ -10,10 +10,11 @@
 #include "AuxKernel.h"
 #include "FeatureFloodCount.h"
 
-//Forward Declarations
+// Forward Declarations
 class FeatureFloodCountAux;
+class GrainTrackerInterface;
 
-template<>
+template <>
 InputParameters validParams<FeatureFloodCountAux>();
 
 /**
@@ -37,7 +38,7 @@ protected:
   /// Function being used to compute the value of this kernel
   const FeatureFloodCount & _flood_counter;
 
-  const unsigned int _var_idx;
+  const std::size_t _var_idx;
   const MooseEnum _field_display;
   bool _var_coloring;
 
@@ -47,4 +48,4 @@ protected:
   Real _value;
 };
 
-#endif //FEATUREFLOODCOUNTAUX_H
+#endif // FEATUREFLOODCOUNTAUX_H

@@ -15,20 +15,23 @@
 #include "RelativeSolutionDifferenceNorm.h"
 #include "Transient.h"
 
-template<>
-InputParameters validParams<RelativeSolutionDifferenceNorm>()
+template <>
+InputParameters
+validParams<RelativeSolutionDifferenceNorm>()
 {
   InputParameters params = validParams<GeneralPostprocessor>();
   return params;
 }
 
-RelativeSolutionDifferenceNorm::RelativeSolutionDifferenceNorm(const InputParameters & params) :
-    GeneralPostprocessor(params)
+RelativeSolutionDifferenceNorm::RelativeSolutionDifferenceNorm(const InputParameters & params)
+  : GeneralPostprocessor(params), _trex(dynamic_cast<Transient *>(_app.getExecutioner()))
 {
+  if (!_trex)
+    mooseError("RelativeSolutionDifferenceNorm postprocessor is only for transient calculations");
 }
 
 Real
 RelativeSolutionDifferenceNorm::getValue()
 {
-  return _fe_problem.relativeSolutionDifferenceNorm();
+  return _trex->relativeSolutionDifferenceNorm();
 }

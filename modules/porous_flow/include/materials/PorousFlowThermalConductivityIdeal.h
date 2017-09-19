@@ -12,13 +12,14 @@
 
 class PorousFlowThermalConductivityIdeal;
 
-template<>
+template <>
 InputParameters validParams<PorousFlowThermalConductivityIdeal>();
 
 /**
  * This material computes thermal conductivity for a PorousMedium - fluid
  * system, by using
- * Thermal conductivity = dry_thermal_conductivity + S^exponent * (wet_thermal_conductivity - dry_thermal_conductivity),
+ * Thermal conductivity = dry_thermal_conductivity + S^exponent * (wet_thermal_conductivity -
+ * dry_thermal_conductivity),
  * where S is the aqueous saturation.
  */
 class PorousFlowThermalConductivityIdeal : public PorousFlowMaterialVectorBase
@@ -27,7 +28,7 @@ public:
   PorousFlowThermalConductivityIdeal(const InputParameters & parameters);
 
 protected:
-  virtual void computeQpProperties();
+  virtual void computeQpProperties() override;
 
   /// Dry thermal conductivity of rock
   const RealTensorValue _la_dry;
@@ -48,16 +49,16 @@ protected:
   const unsigned _aqueous_phase_number;
 
   /// Saturation of the fluid phases at the quadpoints
-  const MaterialProperty<std::vector<Real> > * _saturation_qp;
+  const MaterialProperty<std::vector<Real>> * const _saturation_qp;
 
   /// d(Saturation)/d(PorousFlow variable)
-  const MaterialProperty<std::vector<std::vector<Real> > > * _dsaturation_qp_dvar;
+  const MaterialProperty<std::vector<std::vector<Real>>> * const _dsaturation_qp_dvar;
 
   /// Thermal conducitivity at the qps
   MaterialProperty<RealTensorValue> & _la_qp;
 
   /// d(thermal conductivity at the qps)/d(PorousFlow variable)
-  MaterialProperty<std::vector<RealTensorValue> > & _dla_qp_dvar;
+  MaterialProperty<std::vector<RealTensorValue>> & _dla_qp_dvar;
 };
 
 #endif // POROUSFLOWTHERMALCONDUCTIVITYIDEAL_H

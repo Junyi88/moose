@@ -17,19 +17,19 @@
 
 // MOOSE includes
 #include "ThreadedElementLoop.h"
-#include "MooseObjectWarehouse.h"
 
-// libMesh includes
 #include "libmesh/elem_range.h"
 
 // Forward declarations
-class NonlinearSystem;
+class NonlinearSystemBase;
 class ElementDamper;
+template <typename T>
+class MooseObjectWarehouse;
 
 class ComputeElemDampingThread : public ThreadedElementLoop<ConstElemRange>
 {
 public:
-  ComputeElemDampingThread(FEProblem & feproblem, NonlinearSystem & sys);
+  ComputeElemDampingThread(FEProblemBase & feproblem);
 
   // Splitting Constructor
   ComputeElemDampingThread(ComputeElemDampingThread & x, Threads::split split);
@@ -38,14 +38,14 @@ public:
 
   virtual void onElement(const Elem * elem) override;
 
-  void join(const ComputeElemDampingThread & /*y*/);
+  void join(const ComputeElemDampingThread & y);
 
   Real damping();
 
 protected:
   Real _damping;
-  NonlinearSystem & _nl;
+  NonlinearSystemBase & _nl;
   const MooseObjectWarehouse<ElementDamper> & _element_dampers;
 };
 
-#endif //COMPUTEELEMDAMPINGTHREAD_H
+#endif // COMPUTEELEMDAMPINGTHREAD_H

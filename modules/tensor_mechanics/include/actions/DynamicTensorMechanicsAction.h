@@ -11,7 +11,7 @@
 
 class DynamicTensorMechanicsAction;
 
-template<>
+template <>
 InputParameters validParams<DynamicTensorMechanicsAction>();
 
 class DynamicTensorMechanicsAction : public TensorMechanicsAction
@@ -21,7 +21,6 @@ public:
 
 protected:
   virtual std::string getKernelType();
-  virtual InputParameters getParameters(std::string type);
 };
 
-#endif //DYNAMICTENSORMECHANICSACTION_H
+#endif // DYNAMICTENSORMECHANICSACTION_H

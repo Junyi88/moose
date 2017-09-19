@@ -6,42 +6,69 @@
 /****************************************************************/
 #include "ComputeFiniteStrainElasticStress.h"
 
-template<>
-InputParameters validParams<ComputeFiniteStrainElasticStress>()
+template <>
+InputParameters
+validParams<ComputeFiniteStrainElasticStress>()
 {
   InputParameters params = validParams<ComputeStressBase>();
   params.addClassDescription("Compute stress using elasticity for finite strains");
   return params;
 }
 
-ComputeFiniteStrainElasticStress::ComputeFiniteStrainElasticStress(const InputParameters & parameters) :
-    ComputeStressBase(parameters),
+ComputeFiniteStrainElasticStress::ComputeFiniteStrainElasticStress(
+    const InputParameters & parameters)
+  : ComputeStressBase(parameters),
+    GuaranteeConsumer(this),
     _strain_increment(getMaterialPropertyByName<RankTwoTensor>(_base_name + "strain_increment")),
-    _rotation_increment(getMaterialPropertyByName<RankTwoTensor>(_base_name + "rotation_increment")),
-    _stress_old(declarePropertyOld<RankTwoTensor>(_base_name + "stress"))
+    _rotation_increment(
+        getMaterialPropertyByName<RankTwoTensor>(_base_name + "rotation_increment")),
+    _stress_old(getMaterialPropertyOld<RankTwoTensor>(_base_name + "stress")),
+    _elastic_strain_old(getMaterialPropertyOldByName<RankTwoTensor>(_base_name + "elastic_strain"))
 {
+}
+
+void
+ComputeFiniteStrainElasticStress::initialSetup()
+{
+  if (!hasGuaranteedMaterialProperty(_elasticity_tensor_name, Guarantee::ISOTROPIC))
+    mooseError("ComputeFiniteStrainElasticStress can only be used with elasticity tensor materials "
+               "that guarantee isotropic tensors.");
+
+  _is_elasticity_tensor_guaranteed_constant_in_time =
+      hasGuaranteedMaterialProperty(_elasticity_tensor_name, Guarantee::CONSTANT_IN_TIME);
+  if ((isParamValid("initial_stress")) && !_is_elasticity_tensor_guaranteed_constant_in_time)
+    mooseError("A finite stress material cannot both have an initial stress and an elasticity "
+               "tensor with varying values; please use a defined constant elasticity tensor, "
+               "such as ComputeIsotropicElasticityTensor, if your model defines an initial "
+               "stress, or apply an initial strain instead.");
 }
 
 void
 ComputeFiniteStrainElasticStress::initQpStatefulProperties()
 {
   ComputeStressBase::initQpStatefulProperties();
-
-    _stress_old[_qp] = _stress[_qp];
 }
 
 void
 ComputeFiniteStrainElasticStress::computeQpStress()
 {
-  // stress = s_old + C * de
-  RankTwoTensor intermediate_stress = _stress_old[_qp] + _elasticity_tensor[_qp]*_strain_increment[_qp]; //Calculate stress in intermediate configruation
+  // Calculate the stress in the intermediate configuration
+  RankTwoTensor intermediate_stress;
 
-  //Rotate the stress to the current configuration
-  _stress[_qp] = _rotation_increment[_qp]*intermediate_stress*_rotation_increment[_qp].transpose();
+  // Check if the elasticity tensor has changed values
+  if (!_is_elasticity_tensor_guaranteed_constant_in_time)
+    intermediate_stress =
+        _elasticity_tensor[_qp] * (_elastic_strain_old[_qp] + _strain_increment[_qp]);
+  else
+    intermediate_stress = _stress_old[_qp] + _elasticity_tensor[_qp] * _strain_increment[_qp];
 
-  //Assign value for elastic strain, which is equal to the mechanical strain
+  // Rotate the stress state to the current configuration
+  _stress[_qp] =
+      _rotation_increment[_qp] * intermediate_stress * _rotation_increment[_qp].transpose();
+
+  // Assign value for elastic strain, which is equal to the mechanical strain
   _elastic_strain[_qp] = _mechanical_strain[_qp];
 
-  //Compute dstress_dstrain
-  _Jacobian_mult[_qp] = _elasticity_tensor[_qp]; //This is NOT the exact jacobian
+  // Compute dstress_dstrain
+  _Jacobian_mult[_qp] = _elasticity_tensor[_qp]; // This is NOT the exact jacobian
 }

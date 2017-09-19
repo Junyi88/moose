@@ -15,14 +15,17 @@
 #ifndef MESHCHANGEDINTERFACE_H
 #define MESHCHANGEDINTERFACE_H
 
-#include "InputParameters.h"
-#include "ExecStore.h"
 #include "MooseEnum.h"
 
 // Forward declarations
+class FEProblemBase;
+class InputParameters;
 class MeshChangedInterface;
 
-template<>
+template <typename T>
+InputParameters validParams();
+
+template <>
 InputParameters validParams<MeshChangedInterface>();
 
 /**
@@ -40,9 +43,8 @@ public:
   virtual void meshChanged() {}
 
 protected:
-
-  /// Reference to FEProblem instance
-  FEProblem & _mci_feproblem;
+  /// Reference to FEProblemBase instance
+  FEProblemBase & _mci_feproblem;
 };
 
 #endif /* MESHCHANGEDINTERFACE_H */

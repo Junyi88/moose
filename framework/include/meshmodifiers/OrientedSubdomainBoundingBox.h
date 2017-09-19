@@ -16,21 +16,21 @@
 #define ORIENTEDSUBDOMAINBOUNDINGBOX_H
 
 // MOOSE includes
+#include "MooseEnum.h"
 #include "MeshModifier.h"
 #include "OrientedBoxInterface.h"
 
 // Forward declerations
 class OrientedSubdomainBoundingBox;
 
-template<>
+template <>
 InputParameters validParams<OrientedSubdomainBoundingBox>();
 
 /**
- * MeshModifier for defining a Subdomain inside or outside of a bounding box with arbitrary orientation
+ * MeshModifier for defining a Subdomain inside or outside of a bounding box with arbitrary
+ * orientation
  */
-class OrientedSubdomainBoundingBox :
-  public MeshModifier,
-  public OrientedBoxInterface
+class OrientedSubdomainBoundingBox : public MeshModifier, public OrientedBoxInterface
 {
 public:
   /**
@@ -43,10 +43,10 @@ private:
   virtual void modify() override;
 
   /// ID location (inside of outside of box)
-  MooseEnum _location;
+  const MooseEnum _location;
 
   /// Block ID to assign to the region
-  SubdomainID _block_id;
+  const SubdomainID _block_id;
 };
 
-#endif //ORIENTEDSUBDOMAINBOUNDINGBOX_H
+#endif // ORIENTEDSUBDOMAINBOUNDINGBOX_H

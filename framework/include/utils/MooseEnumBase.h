@@ -17,8 +17,12 @@
 
 // C++ includes
 #include <string>
+#include <set>
 #include <vector>
 #include <map>
+
+// MOOSE includes
+#include "MooseEnumItem.h"
 
 /**
  * The base class for both the MooseEnum and MultiMooseEnum classes.
@@ -30,10 +34,11 @@ public:
    * Constructor that takes a list of enumeration values, and a
    * separate string to set a default for this instance.
    * @param names - a list of names for this enumeration
-   * @param allow_out_of_range - determines whether this enumeration will accept values outside of it's range of
+   * @param allow_out_of_range - determines whether this enumeration will accept values outside of
+   * it's range of
    *                       defined values.
    */
-  MooseEnumBase(std::string names, bool allow_out_of_range=false);
+  MooseEnumBase(std::string names, bool allow_out_of_range = false);
 
   /**
    * Copy Constructor for use when creating vectors of MooseEnumBases
@@ -51,26 +56,31 @@ public:
    * you may supply an option new option that will be used in a message telling
    * the user which new option replaces the old one.
    */
-  void deprecate(const std::string & name, const std::string & new_name="");
+  void deprecate(const std::string & name, const std::string & new_name = "");
 
   /**
    * Method for returning a vector of all valid enumeration names for this instance
    * @return a vector of names
    */
-  /// TODO: This should probably be turn into a set to avoid duplicate entries
-  const std::vector<std::string> & getNames() const { return _names; }
+  std::vector<std::string> getNames() const;
 
   /**
    * Method for returning the raw name strings for this instance
    * @return a space separated list of names
    */
-  const std::string & getRawNames() const { return _raw_names; }
+  std::string getRawNames() const;
 
   /**
    * IsValid
    * @return - a Boolean indicating whether this Enumeration has been set
    */
   virtual bool isValid() const = 0;
+
+  /**
+   * isOutOfRangeAllowed
+   * @return - a Boolean indicating whether enum names out of range are allowed
+   */
+  bool isOutOfRangeAllowed() const { return _out_of_range_index; }
 
 protected:
   MooseEnumBase();
@@ -79,9 +89,10 @@ protected:
    * Populates the _names vector
    * @param names - a space separated list of names used to populate the internal names vector
    */
-  void fillNames(std::string names, std::string option_delim=" ");
+  void fillNames(std::string names, std::string option_delim = " ");
 
-  // The method that must be implemented to check derived class values against the _deprecated_names list
+  // The method that must be implemented to check derived class values against the _deprecated_names
+  // list
   virtual void checkDeprecated() const = 0;
 
   /**
@@ -89,14 +100,17 @@ protected:
    */
   void checkDeprecatedBase(const std::string & name_upper) const;
 
-  /// The vector of enumeration names
-  std::vector<std::string> _names;
+  ///@{
+  /**
+   * Locate an item.
+   */
+  std::set<MooseEnumItem>::const_iterator find(const MooseEnumItem & other) const;
+  std::set<MooseEnumItem>::const_iterator find(const std::string & name) const;
+  std::set<MooseEnumItem>::const_iterator find(int id) const;
+  ///@}
 
-  /// The raw string of names separated by spaces
-  std::string _raw_names;
-
-  /// The map of names to enumeration constants
-  std::map<std::string, int> _name_to_id;
+  /// Storage for the assigned items
+  std::set<MooseEnumItem> _items;
 
   /// The map of deprecated names and optional replacements
   std::map<std::string, std::string> _deprecated_names;
@@ -111,4 +125,4 @@ protected:
   const static int INVALID_ID;
 };
 
-#endif //MOOSEENUMBASE_H
+#endif // MOOSEENUMBASE_H

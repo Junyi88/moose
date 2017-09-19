@@ -22,7 +22,7 @@
 #include <string>
 
 // Forward declarations
-class FEProblem;
+class FEProblemBase;
 
 /**
  * Class for doing restart.
@@ -32,7 +32,7 @@ class FEProblem;
 class Resurrector
 {
 public:
-  Resurrector(FEProblem & fe_problem);
+  Resurrector(FEProblemBase & fe_problem);
   virtual ~Resurrector() = default;
 
   /**
@@ -42,6 +42,13 @@ public:
   void setRestartFile(const std::string & file_base);
 
   /**
+   * Set the file extension from which we will restart libMesh
+   * equation systems.  The default suffix is "xdr".
+   * @param file_ext The file extension of a restart file
+   */
+  void setRestartSuffix(const std::string & file_ext);
+
+  /**
    * Perform a restart from a file
    */
   void restartFromFile();
@@ -49,12 +56,14 @@ public:
   void restartRestartableData();
 
 protected:
-
-  /// Reference to a FEProblem being restarted
-  FEProblem & _fe_problem;
+  /// Reference to a FEProblemBase being restarted
+  FEProblemBase & _fe_problem;
 
   /// name of the file that we restart from
   std::string _restart_file_base;
+
+  /// name of the file extension that we restart from
+  std::string _restart_file_suffix;
 
   /// Restartable Data
   RestartableDataIO _restartable;

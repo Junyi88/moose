@@ -5,17 +5,16 @@
 /*             See LICENSE for full restrictions                */
 /****************************************************************/
 
-
 #ifndef POROUSFLOWDARCYVELOCITYCOMPONENT_H
 #define POROUSFLOWDARCYVELOCITYCOMPONENT_H
 
 #include "AuxKernel.h"
 #include "PorousFlowDictator.h"
 
-//Forward Declarations
+// Forward Declarations
 class PorousFlowDarcyVelocityComponent;
 
-template<>
+template <>
 InputParameters validParams<PorousFlowDarcyVelocityComponent>();
 
 /**
@@ -28,7 +27,7 @@ InputParameters validParams<PorousFlowDarcyVelocityComponent>();
  * and w_j is the fluid weight
  * This is measured in m^3 . s^-1 . m^-2
  */
-class PorousFlowDarcyVelocityComponent: public AuxKernel
+class PorousFlowDarcyVelocityComponent : public AuxKernel
 {
 public:
   PorousFlowDarcyVelocityComponent(const InputParameters & parameters);
@@ -37,19 +36,19 @@ protected:
   virtual Real computeValue();
 
   /// Relative permeability of each phase
-  const MaterialProperty<std::vector<Real> > & _relative_permeability;
+  const MaterialProperty<std::vector<Real>> & _relative_permeability;
 
   /// Viscosity of each component in each phase
-  const MaterialProperty<std::vector<Real> > & _fluid_viscosity;
+  const MaterialProperty<std::vector<Real>> & _fluid_viscosity;
 
   /// Permeability of porous material
   const MaterialProperty<RealTensorValue> & _permeability;
 
   /// Gradient of the pore pressure in each phase
-  const MaterialProperty<std::vector<RealGradient> > & _grad_p;
+  const MaterialProperty<std::vector<RealGradient>> & _grad_p;
 
   /// Fluid density for each phase (at the qp)
-  const MaterialProperty<std::vector<Real> > & _fluid_density_qp;
+  const MaterialProperty<std::vector<Real>> & _fluid_density_qp;
 
   /// PorousFlow UserObject
   const PorousFlowDictator & _dictator;

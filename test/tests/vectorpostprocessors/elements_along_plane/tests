@@ -15,5 +15,5 @@
     type = 'CSVDiff'
     input = '3d.i'
     csvdiff = '3d_out_elems_0001.csv'
-  [../]
+[../]
 []

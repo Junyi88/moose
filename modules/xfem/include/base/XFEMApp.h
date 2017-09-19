@@ -12,18 +12,20 @@
 
 class XFEMApp;
 
-template<>
+template <>
 InputParameters validParams<XFEMApp>();
 
 class XFEMApp : public MooseApp
 {
 public:
-  XFEMApp(const InputParameters &parameters);
+  XFEMApp(const InputParameters & parameters);
   virtual ~XFEMApp();
 
   static void registerApps();
+  static void registerObjectDepends(Factory & factory);
   static void registerObjects(Factory & factory);
   static void associateSyntax(Syntax & syntax, ActionFactory & action_factory);
+  static void associateSyntaxDepends(Syntax & syntax, ActionFactory & action_factory);
 };
 
 #endif /* XFEMAPP_H */

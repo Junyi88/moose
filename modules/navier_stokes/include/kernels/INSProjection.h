@@ -12,7 +12,7 @@
 // Forward Declarations
 class INSProjection;
 
-template<>
+template <>
 InputParameters validParams<INSProjection>();
 
 /**
@@ -27,7 +27,7 @@ class INSProjection : public Kernel
 public:
   INSProjection(const InputParameters & parameters);
 
-  virtual ~INSProjection(){}
+  virtual ~INSProjection() {}
 
 protected:
   virtual Real computeQpResidual();
@@ -48,12 +48,11 @@ protected:
   unsigned _a3_var_number;
   unsigned _p_var_number;
 
-  // Material properties
-  Real _rho;
-
   // Parameters
   unsigned _component;
-};
 
+  // Material properties
+  const MaterialProperty<Real> & _rho;
+};
 
 #endif // INSPROJECTION_H

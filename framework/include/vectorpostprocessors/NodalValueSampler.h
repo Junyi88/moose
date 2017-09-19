@@ -18,15 +18,13 @@
 #include "NodalVariableVectorPostprocessor.h"
 #include "SamplerBase.h"
 
-//Forward Declarations
+// Forward Declarations
 class NodalValueSampler;
 
-template<>
+template <>
 InputParameters validParams<NodalValueSampler>();
 
-class NodalValueSampler :
-  public NodalVariableVectorPostprocessor,
-  protected SamplerBase
+class NodalValueSampler : public NodalVariableVectorPostprocessor, protected SamplerBase
 {
 public:
   NodalValueSampler(const InputParameters & parameters);
@@ -45,6 +43,9 @@ public:
 protected:
   /// So we don't have to create and destroy this vector over and over again
   std::vector<Real> _values;
+
+  /// Vector of 0 and 1 values which records whether values are present at the current node.
+  std::vector<unsigned int> _has_values;
 };
 
 #endif

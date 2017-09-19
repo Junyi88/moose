@@ -25,15 +25,16 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-OutputWarehouse::OutputWarehouse(MooseApp & app) :
-    _app(app),
-    _buffer_action_console_outputs(true),
+OutputWarehouse::OutputWarehouse(MooseApp & app)
+  : _app(app),
+    _buffer_action_console_outputs(false),
     _output_exec_flag(EXEC_CUSTOM),
-    _force_output(false)
+    _force_output(false),
+    _logging_requested(false)
 {
   // Set the reserved names
-  _reserved.insert("none");                  // allows 'none' to be used as a keyword in 'outputs' parameter
-  _reserved.insert("all");                   // allows 'all' to be used as a keyword in 'outputs' parameter
+  _reserved.insert("none"); // allows 'none' to be used as a keyword in 'outputs' parameter
+  _reserved.insert("all");  // allows 'all' to be used as a keyword in 'outputs' parameter
 }
 
 OutputWarehouse::~OutputWarehouse()
@@ -86,7 +87,7 @@ OutputWarehouse::subdomainSetup()
 }
 
 void
-OutputWarehouse::addOutput(MooseSharedPointer<Output> & output)
+OutputWarehouse::addOutput(std::shared_ptr<Output> & output)
 {
   _all_ptrs.push_back(output);
 
@@ -109,7 +110,7 @@ OutputWarehouse::addOutput(MooseSharedPointer<Output> & output)
   // Insert object sync times to the global set
   if (output->parameters().isParamValid("sync_times"))
   {
-    std::vector<Real> sync_times = output->parameters().get<std::vector<Real> >("sync_times");
+    std::vector<Real> sync_times = output->parameters().get<std::vector<Real>>("sync_times");
     _sync_times.insert(sync_times.begin(), sync_times.end());
   }
 }
@@ -125,7 +126,7 @@ OutputWarehouse::getOutputNames()
 {
   if (_object_names.empty())
   {
-    std::vector<Action *> actions =  _app.actionWarehouse().getActionsByName("add_output");
+    const auto & actions = _app.actionWarehouse().getActionListByName("add_output");
     for (const auto & act : actions)
       _object_names.insert(act->name());
   }
@@ -136,7 +137,7 @@ void
 OutputWarehouse::addOutputFilename(const OutFileBase & filename)
 {
   if (_file_base_set.find(filename) != _file_base_set.end())
-    mooseError("An output file with the name, " << filename << ", already exists.");
+    mooseError("An output file with the name, ", filename, ", already exists.");
   _file_base_set.insert(filename);
 }
 
@@ -147,10 +148,12 @@ OutputWarehouse::outputStep(ExecFlagType type)
     type = EXEC_FORCED;
 
   for (const auto & obj : _all_objects)
-    obj->outputStep(type);
+    if (obj->enabled())
+      obj->outputStep(type);
 
   /**
-   * This is one of three locations where we explicitly flush the output buffers during a simulation:
+   * This is one of three locations where we explicitly flush the output buffers during a
+   * simulation:
    * PetscOutput::petscNonlinearOutput()
    * PetscOutput::petscLinearOutput()
    * OutputWarehouse::outputStep()
@@ -189,11 +192,12 @@ OutputWarehouse::mooseConsole()
   {
     if (!_buffer_action_console_outputs)
     {
-      // this will cause messages to console before its construction immediately flushed and cleared.
+      // this will cause messages to console before its construction immediately flushed and
+      // cleared.
       std::string message = _console_buffer.str();
       if (_app.multiAppLevel() > 0)
         MooseUtils::indentMessage(_app.name(), message);
-      Moose::out << message;
+      Moose::out << message << std::flush;
       _console_buffer.clear();
       _console_buffer.str("");
     }
@@ -261,15 +265,18 @@ OutputWarehouse::getSyncTimes()
 }
 
 void
-OutputWarehouse::addInterfaceHideVariables(const std::string & output_name, const std::set<std::string> & variable_names)
+OutputWarehouse::addInterfaceHideVariables(const std::string & output_name,
+                                           const std::set<std::string> & variable_names)
 {
   _interface_map[output_name].insert(variable_names.begin(), variable_names.end());
 }
 
 void
-OutputWarehouse::buildInterfaceHideVariables(const std::string & output_name, std::set<std::string> & hide)
+OutputWarehouse::buildInterfaceHideVariables(const std::string & output_name,
+                                             std::set<std::string> & hide)
 {
-  std::map<std::string, std::set<std::string> >::const_iterator it = _interface_map.find(output_name);
+  std::map<std::string, std::set<std::string>>::const_iterator it =
+      _interface_map.find(output_name);
   if (it != _interface_map.end())
     hide = it->second;
 }
@@ -279,9 +286,8 @@ OutputWarehouse::checkOutputs(const std::set<OutputName> & names)
 {
   for (const auto & name : names)
     if (!isReservedName(name) && !hasOutput(name))
-      mooseError("The output object '" << name << "' is not a defined output object");
+      mooseError("The output object '", name, "' is not a defined output object");
 }
-
 
 const std::set<std::string> &
 OutputWarehouse::getReservedNames() const

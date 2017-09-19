@@ -12,7 +12,7 @@
 
 class PorousFlowSquarePulsePointSource;
 
-template<>
+template <>
 InputParameters validParams<PorousFlowSquarePulsePointSource>();
 
 /**
@@ -25,8 +25,8 @@ class PorousFlowSquarePulsePointSource : public DiracKernel
 public:
   PorousFlowSquarePulsePointSource(const InputParameters & parameters);
 
-  virtual void addPoints();
-  virtual Real computeQpResidual();
+  virtual void addPoints() override;
+  virtual Real computeQpResidual() override;
 
 protected:
   /// The constant mass flux (kg/s)
@@ -42,4 +42,4 @@ protected:
   const Real _end_time;
 };
 
-#endif //POROUSFLOWSQUAREPULSEPOINTSOURCE_H
+#endif // POROUSFLOWSQUAREPULSEPOINTSOURCE_H

@@ -17,13 +17,12 @@
 
 // MOOSE includes
 #include "AuxKernel.h"
-#include "libmesh/mesh_tools.h"
+#include "libmesh/bounding_box.h"
 
 // Forward declarations
 class RandomCorrosion;
-namespace libMesh{ namespace MeshTools { class BoundingBox; } }
 
-template<>
+template <>
 InputParameters validParams<RandomCorrosion>();
 
 /**
@@ -39,7 +38,6 @@ InputParameters validParams<RandomCorrosion>();
 class RandomCorrosion : public AuxKernel
 {
 public:
-
   /**
    * Class constructor
    * @param parameters The input parameters for the RandomCorrosion object.
@@ -52,7 +50,6 @@ public:
   void timestepSetup() override;
 
 protected:
-
   /**
    * Computes the "corrosion" for the supplied phase variable.
    * @return The compute "phase" variable
@@ -66,12 +63,11 @@ protected:
   Point getRandomPoint();
 
 private:
-
   /// The vector of random points to apply "corrosion"
   std::vector<Point> _points;
 
   /// The bounding box of the domain, used for generating "corrosion" points
-  MeshTools::BoundingBox _box;
+  BoundingBox _box;
 
   /// Nodal tolerance for determining if "corrosion" should occur at the current node
   const Real & _nodal_tol;
@@ -86,4 +82,4 @@ private:
   const PostprocessorValue & _temperature;
 };
 
-#endif //RANDOMCORROSION_H
+#endif // RANDOMCORROSION_H

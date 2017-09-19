@@ -15,11 +15,13 @@
 #ifndef CREATEPROBLEMACTION_H
 #define CREATEPROBLEMACTION_H
 
+// MOOSE includes
 #include "MooseObjectAction.h"
+#include "MultiMooseEnum.h"
 
 class CreateProblemAction;
 
-template<>
+template <>
 InputParameters validParams<CreateProblemAction>();
 
 class CreateProblemAction : public MooseObjectAction

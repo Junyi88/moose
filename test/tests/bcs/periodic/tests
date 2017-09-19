@@ -43,6 +43,7 @@
     type = 'Exodiff'
     input = 'orthogonal_pbc_on_square.i'
     exodiff = 'orthogonal_pbc_on_square_out.e'
+    use_old_floor = true
     group = 'periodic'
   [../]
 
@@ -76,6 +77,16 @@
     exodiff = 'out.e'
     group = 'periodic'
     abs_zero = 1e-6
+  [../]
+
+  [./testperiodic_dp]
+    type = 'Exodiff'
+    input = 'periodic_bc_displaced_problem.i'
+    exodiff = 'out_displaced_problem.e'
+    group = 'periodic'
+    abs_zero = 1e-6
+    max_parallel = 2
+    min_parallel = 2
   [../]
 
   [./testtrapezoid]

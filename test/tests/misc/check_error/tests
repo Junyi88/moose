@@ -14,12 +14,19 @@
   [./checked_pointer_param_test]
     type = 'RunException'
     input = 'checked_pointer_param_test.i'
-    expect_err = "quotes around a vector"
+    expect_err = "after parameter name"
   [../]
 
   [./add_aux_variable_multiple_test]
     type = 'RunException'
     input = 'add_aux_variable_multiple_test.i'
+    expect_err = "AuxVariable with name 'q' already exists but is of a differing type!"
+  [../]
+
+  [./add_aux_scalar_variable_multiple_test]
+    type = 'RunException'
+    input = 'add_aux_variable_multiple_test.i'
+    cli_args = 'Variables/q/family=SCALAR MoreAuxVariables/q/family=SCALAR'
     expect_err = "AuxVariable with name 'q' already exists but is of a differing type!"
   [../]
 
@@ -263,7 +270,7 @@
   [./missing_active_section_test]
     type = 'RunException'
     input = 'missing_active_section.i'
-    expect_err = "One or more active lists in the input file are missing a referenced section"
+    expect_err = "variables listed as active"
   [../]
 
   [./missing_coupled_mat_prop_test]
@@ -305,14 +312,14 @@
   [./bad_stateful_material_only_old]
     type = 'RunException'
     input = 'bad_stateful_material.i'
-    expect_err = "Material '\S+' has stateful properties declared but not associated"
+    expect_err = "One or more Material Properties were not supplied on block"
   [../]
 
   [./bad_stateful_material_only_older]
     type = 'RunException'
     input = 'bad_stateful_material.i'
-    expect_err = "Material '\S+' has stateful properties declared but not associated"
-    cli_args = 'Materials/stateful_mat/declare_only_older=true'
+    expect_err = "One or more Material Properties were not supplied on block"
+    cli_args = 'Materials/stateful_mat/get_older=true'
   [../]
 
   [./missing_mesh_test]
@@ -324,31 +331,32 @@
   [./missing_req_par_action_obj_test]
     type = 'RunException'
     input = 'missing_req_par_action_obj_test.i'
-    expect_err = "The following required parameters are missing:"
+    expect_err = "The following required parameters are missing:\n\s*ConvectionDiffusion/variables"
   [../]
 
   [./missing_req_par_mesh_block_test]
     type = 'RunException'
     input = 'missing_req_par_mesh_block_test.i'
-    expect_err = "The following required parameters are missing:"
+    expect_err = "The following required parameters are missing:\n\s*Mesh/stripes"
   [../]
 
   [./missing_req_par_moose_obj_test]
     type = 'RunException'
     input = 'missing_req_par_moose_obj_test.i'
-    expect_err = "The following required parameters are missing:"
+    expect_err = "The following required parameters are missing:\n\s*Kernels/diff/variable"
   [../]
 
   [./missing_required_coupled_test]
     type = 'RunException'
     input = 'missing_required_coupled.i'
-    expect_err = "The following required parameters are missing:"
+    expect_err = "The following required parameters are missing:\n\s*Kernels/conv_v/velocity_vector"
   [../]
 
   [./multi_precond_test]
     type = 'RunException'
     input = 'multi_precond_test.i'
     expect_err = "More than one active Preconditioner detected"
+    max_parallel = 1
   [../]
 
   [./nan_test]
@@ -389,9 +397,9 @@
   [../]
 
   [./override_name_variable_test]
-    type = 'RunApp'
+    type = 'RunException'
     input = 'override_name_variable_test.i'
-    expect_out = "The following variables were overridden or supplied multiple times:"
+    expect_err = 'supplied multiple times'
     max_parallel = 1
     allow_warnings = true
   [../]
@@ -422,7 +430,7 @@
 
   [./unused_param_test]
     type = 'RunApp'
-    expect_out = "The following parameters were unused in your input file"
+    expect_out = "unused parameter 'Mesh/unused_param'"
     input = 'unused_param_test.i'
     cli_args = '--warn-unused'
     allow_warnings = true
@@ -431,7 +439,7 @@
 
   [./unused_param_test_cli]
     type = 'RunApp'
-    expect_out = "The following parameters were unused on the command line"
+    expect_out = "unused parameter 'Executioner/unused_param'"
     input = 'unused_param_test.i'
     cli_args = '--warn-unused Executioner/unused_param=true'
     allow_warnings = true
@@ -473,7 +481,7 @@
   [./ics_missing_variable]
     type = 'RunException'
     input = 'ic_variable_not_specified.i'
-    expect_err = "The following required parameters are missing:"
+    expect_err = "The following required parameters are missing:\n\s*ICs/u_ic/variable"
   [../]
 
   [./ic_bnd_for_non_nodal]
@@ -534,5 +542,20 @@
     type = 'RunException'
     input = wrong_displacement_order.i
     expect_err = "Error: mesh has SECOND order elements, so all displacement variables must be SECOND order."
+  [../]
+
+  [./perf_log_control_from_multiapp_sub]
+    type = 'RunException'
+    input = 'multi_master.i'
+    expect_err = "Performance logging cannot currently be controlled from a Multiapp"
+    max_parallel = 1
+  [../]
+
+  [./function_conflict]
+    # Check to see if a warning is produced when a function name could evaluate to a ParsedFunction
+    type = 'RunApp'
+    input = 'function_conflict.i'
+    expect_out = "Function name 'x' could evaluate as a ParsedFunction"
+    allow_warnings = true
   [../]
 []

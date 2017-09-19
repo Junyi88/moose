@@ -7,11 +7,14 @@
 
 #include "ComputeCosseratSmallStrain.h"
 
-// libmesh includes
+// MOOSE includes
+#include "PermutationTensor.h"
+
 #include "libmesh/quadrature.h"
 
-template<>
-InputParameters validParams<ComputeCosseratSmallStrain>()
+template <>
+InputParameters
+validParams<ComputeCosseratSmallStrain>()
 {
   InputParameters params = validParams<ComputeStrainBase>();
   params.addClassDescription("Compute small Cosserat strains");
@@ -19,16 +22,16 @@ InputParameters validParams<ComputeCosseratSmallStrain>()
   return params;
 }
 
-ComputeCosseratSmallStrain::ComputeCosseratSmallStrain(const InputParameters & parameters) :
-    ComputeStrainBase(parameters),
-    _stress_free_strain(getDefaultMaterialProperty<RankTwoTensor>(_base_name + "stress_free_strain")),
+ComputeCosseratSmallStrain::ComputeCosseratSmallStrain(const InputParameters & parameters)
+  : ComputeStrainBase(parameters),
     _curvature(declareProperty<RankTwoTensor>("curvature")),
     _nrots(coupledComponents("Cosserat_rotations")),
     _wc(_nrots),
     _grad_wc(_nrots)
 {
   if (_nrots != 3)
-    mooseError("ComputeCosseratSmallStrain: This Material is only defined for 3-dimensional simulations so 3 Cosserat rotation variables are needed");
+    mooseError("ComputeCosseratSmallStrain: This Material is only defined for 3-dimensional "
+               "simulations so 3 Cosserat rotation variables are needed");
   for (unsigned i = 0; i < _nrots; ++i)
   {
     _wc[i] = &coupledValue("Cosserat_rotations", i);
@@ -48,6 +51,10 @@ ComputeCosseratSmallStrain::computeQpProperties()
         strain(i, j) += PermutationTensor::eps(i, j, k) * wc_vector(k);
 
   _total_strain[_qp] = strain;
-  _mechanical_strain[_qp] = strain - _stress_free_strain[_qp];
+
+  _mechanical_strain[_qp] = strain;
+  for (auto es : _eigenstrains)
+    _mechanical_strain[_qp] -= (*es)[_qp];
+
   _curvature[_qp] = RankTwoTensor((*_grad_wc[0])[_qp], (*_grad_wc[1])[_qp], (*_grad_wc[2])[_qp]);
 }

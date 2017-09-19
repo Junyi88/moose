@@ -1,6 +1,9 @@
 [Mesh]
   type = FileMesh
   file = constraints.e
+  # NearestNodeLocator, which is needed by TiedValueConstraint,
+  # only works with ReplicatedMesh currently
+  parallel_type = replicated
 [../]
 
 [Variables]
@@ -68,7 +71,7 @@
 [Controls]
   [./constraints]
     type = TimePeriod
-    disable_objects = 'lower complete'
+    disable_objects = 'Constraints/lower Constraint::complete'
     start_time      = '0.0   2.0'
     end_time        = '2.0   4.0'
     execute_on = 'initial timestep_begin'

@@ -17,10 +17,10 @@
 
 #include "GeneralPostprocessor.h"
 
-//Forward Declarations
+// Forward Declarations
 class NumNonlinearIterations;
 
-template<>
+template <>
 InputParameters validParams<NumNonlinearIterations>();
 
 /**
@@ -46,8 +46,8 @@ public:
   virtual Real getValue() override;
 
 protected:
-  /// Pointer to the FEProblem
-  FEProblem * _fe_problem;
+  /// Pointer to the FEProblemBase
+  FEProblemBase * _fe_problem;
 
   /// True if we should accumulate over all nonlinear solves done as part of Picard iterations in a step.
   bool _accumulate_over_step;

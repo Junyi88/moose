@@ -28,58 +28,79 @@ class MultiMooseEnum;
 
 namespace Moose
 {
-  // Scalar conversions
-  template<typename T>
-  T stringToEnum(const std::string & s);
+// Scalar conversions
+template <typename T>
+T stringToEnum(const std::string & s);
 
-  template<>
-  ExecFlagType stringToEnum<ExecFlagType>(const std::string & s);
+template <>
+ExecFlagType stringToEnum<ExecFlagType>(const std::string & s);
 
-  template<>
-  QuadratureType stringToEnum<QuadratureType>(const std::string & s);
+template <>
+QuadratureType stringToEnum<QuadratureType>(const std::string & s);
 
-  template<>
-  Order stringToEnum<Order>(const std::string & s);
+template <>
+Order stringToEnum<Order>(const std::string & s);
 
-  template<>
-  CoordinateSystemType stringToEnum<CoordinateSystemType>(const std::string & s);
+template <>
+CoordinateSystemType stringToEnum<CoordinateSystemType>(const std::string & s);
 
-  template<>
-  SolveType stringToEnum<SolveType>(const std::string & s);
+template <>
+SolveType stringToEnum<SolveType>(const std::string & s);
 
-  template<>
-  LineSearchType stringToEnum<LineSearchType>(const std::string & s);
+template <>
+LineSearchType stringToEnum<LineSearchType>(const std::string & s);
 
-  // Vector conversions
-  template<typename T>
-  std::vector<T> vectorStringsToEnum(const MultiMooseEnum & v);
+// Vector conversions
+template <typename T>
+std::vector<T> vectorStringsToEnum(const MultiMooseEnum & v);
 
-  template<>
-  std::vector<ExecFlagType> vectorStringsToEnum<ExecFlagType>(const MultiMooseEnum & v);
+template <>
+std::vector<ExecFlagType> vectorStringsToEnum<ExecFlagType>(const MultiMooseEnum & v);
 
-  /// conversion to string
-  template<typename T>
-  std::string
-  stringify(const T & t)
-  {
-    std::ostringstream os;
-    os << t;
-    return os.str();
-  }
+/// conversion to string
+template <typename T>
+std::string
+stringify(const T & t)
+{
+  std::ostringstream os;
+  os << t;
+  return os.str();
+}
 
-  /// Convert solve type into human readable string
-  template<>
-  std::string stringify(const SolveType & t);
+/// Convert solve type into human readable string
+std::string stringify(const SolveType & t);
 
-  /// Convert execute flags type into human readable string
-  template<>
-  std::string stringify(const ExecFlagType & t);
+/// Convert execute flags type into human readable string
+std::string stringify(const ExecFlagType & t);
 
-  /**
-   * Stringify Reals with enough precision to guarantee lossless
-   * Real -> string -> Real roundtrips.
-   */
-  std::string stringifyExact(Real);
+/// Add no-op stringify if the argument already is a string (must use overloading)
+std::string stringify(const std::string & s);
+
+/// Add pair stringify to support maps
+template <typename T, typename U>
+std::string
+stringify(const std::pair<T, U> & p)
+{
+  return stringify(p.first) + ':' + stringify(p.second);
+}
+
+/// Convert a container to a flat comma (or otherwise) separated string
+template <template <typename...> class T, typename... U>
+std::string
+stringify(const T<U...> & c, const std::string & delim = ",")
+{
+  std::string str;
+  const auto begin = c.begin(), end = c.end();
+  for (auto i = begin; i != end; ++i)
+    str += (i != begin ? delim : "") + stringify(*i);
+  return str;
+}
+
+/**
+ * Stringify Reals with enough precision to guarantee lossless
+ * Real -> string -> Real roundtrips.
+ */
+std::string stringifyExact(Real);
 }
 
 /**
@@ -89,4 +110,4 @@ namespace Moose
  */
 Point toPoint(const std::vector<Real> & pos);
 
-#endif //CONVERSION_H
+#endif // CONVERSION_H

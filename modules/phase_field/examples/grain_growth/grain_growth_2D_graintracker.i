@@ -29,12 +29,24 @@
   [../]
 []
 
+[UserObjects]
+  [./voronoi]
+    type = PolycrystalVoronoi
+    grain_num = 100 # Number of grains
+    rand_seed = 10
+  [../]
+  [./grain_tracker]
+    type = GrainTracker
+    threshold = 0.2
+    connecting_threshold = 0.08
+    compute_halo_maps = true # Only necessary for displaying HALOS
+  [../]
+[]
+
 [ICs]
   [./PolycrystalICs]
-    [./PolycrystalVoronoiIC]
-      grain_num = 100 #Number of grains
-      advanced_op_assignment = true
-      rand_seed = 10
+    [./PolycrystalColoringIC]
+      polycrystal_ic_uo = voronoi
     [../]
   [../]
 []
@@ -130,13 +142,6 @@
 
 [Postprocessors]
   # Scalar postprocessors
-  [./grain_tracker]
-    type = GrainTracker
-    threshold = 0.2
-    connecting_threshold = 0.08
-    flood_entity_type = ELEMENTAL
-    compute_halo_maps = true # Only necessary for displaying HALOS
-  [../]
   [./dt]
     # Outputs the current time step
     type = TimestepSize
@@ -175,10 +180,6 @@
     coarsen_fraction = 0.1 # Fraction of low error that will coarsened
     max_h_level = 4 # Max number of refinements used, starting from initial mesh (before uniform refinement)
   [../]
-[]
-
-[Problem]
-  use_legacy_uo_initialization = false
 []
 
 [Outputs]

@@ -16,29 +16,26 @@
 #define TECPLOT_H
 
 // MOOSE includes
-#include "BasicOutput.h"
 #include "OversampleOutput.h"
 
 // Forward declarations
 class Tecplot;
 
-template<>
+template <>
 InputParameters validParams<Tecplot>();
 
 /**
  * Class for output data to the TecplotII format
  */
-class Tecplot : public BasicOutput<OversampleOutput>
+class Tecplot : public OversampleOutput
 {
 public:
-
   /**
    * Class constructor
    */
   Tecplot(const InputParameters & parameters);
 
 protected:
-
   /**
    * Overload the Output::output method, this is required for Tecplot
    * output due to the method utilized for outputing single/global parameters
@@ -52,7 +49,6 @@ protected:
   virtual std::string filename() override;
 
 private:
-
   /// Flag for binary output
   bool _binary;
 

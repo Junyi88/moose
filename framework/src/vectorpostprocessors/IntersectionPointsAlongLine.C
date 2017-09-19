@@ -12,13 +12,16 @@
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
 
-// MOOSE includes
 #include "IntersectionPointsAlongLine.h"
+
+// MOOSE includes
+#include "LineSegment.h"
 #include "RayTracing.h"
 #include "MooseMesh.h"
 
-template<>
-InputParameters validParams<IntersectionPointsAlongLine>()
+template <>
+InputParameters
+validParams<IntersectionPointsAlongLine>()
 {
   InputParameters params = validParams<GeneralVectorPostprocessor>();
   params.addRequiredParam<Point>("start", "The beginning of the line");
@@ -26,8 +29,8 @@ InputParameters validParams<IntersectionPointsAlongLine>()
   return params;
 }
 
-IntersectionPointsAlongLine::IntersectionPointsAlongLine(const InputParameters & parameters) :
-    GeneralVectorPostprocessor(parameters),
+IntersectionPointsAlongLine::IntersectionPointsAlongLine(const InputParameters & parameters)
+  : GeneralVectorPostprocessor(parameters),
     _start(getParam<Point>("start")),
     _end(getParam<Point>("end")),
     _x_intersections(declareVector("x"))
@@ -47,12 +50,14 @@ IntersectionPointsAlongLine::IntersectionPointsAlongLine(const InputParameters &
   _intersections.push_back(&_z_intersections);
 #endif
 #endif
+
+  _fe_problem.mesh().errorIfDistributedMesh("IntersectionPointsAlongLine");
 }
 
 void
 IntersectionPointsAlongLine::initialize()
 {
-  for (unsigned int i=0; i<_intersections.size(); i++)
+  for (unsigned int i = 0; i < _intersections.size(); i++)
     _intersections[i]->clear();
 }
 
@@ -63,7 +68,13 @@ IntersectionPointsAlongLine::execute()
   std::vector<LineSegment> segments;
 
   std::unique_ptr<PointLocatorBase> pl = _fe_problem.mesh().getPointLocator();
-  Moose::elementsIntersectedByLine(_start, _end, _fe_problem.mesh(), *pl, intersected_elems, segments);
+
+  // We may not have any elements along the given line; if so then
+  // that shouldn't throw a libMesh error.
+  pl->enable_out_of_mesh_mode();
+
+  Moose::elementsIntersectedByLine(
+      _start, _end, _fe_problem.mesh(), *pl, intersected_elems, segments);
 
   const unsigned int num_elems = intersected_elems.size();
 
@@ -72,7 +83,7 @@ IntersectionPointsAlongLine::execute()
     return;
 
   for (unsigned int i = 0; i < LIBMESH_DIM; i++)
-    _intersections[i]->resize(num_elems+1);
+    _intersections[i]->resize(num_elems + 1);
 
   // Add the beginning point
   for (unsigned int i = 0; i < LIBMESH_DIM; i++)
@@ -86,6 +97,6 @@ IntersectionPointsAlongLine::execute()
     const Point & end_point = segment.end();
 
     for (unsigned int j = 0; j < LIBMESH_DIM; j++)
-      (*_intersections[j])[i+1] = end_point(j);
+      (*_intersections[j])[i + 1] = end_point(j);
   }
 }

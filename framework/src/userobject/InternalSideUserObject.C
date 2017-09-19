@@ -15,17 +15,19 @@
 #include "InternalSideUserObject.h"
 #include "Assembly.h"
 
-template<>
-InputParameters validParams<InternalSideUserObject>()
+template <>
+InputParameters
+validParams<InternalSideUserObject>()
 {
   InputParameters params = validParams<UserObject>();
   params += validParams<BlockRestrictable>();
   params += validParams<TwoMaterialPropertyInterface>();
+  params += validParams<TransientInterface>();
   return params;
 }
 
-InternalSideUserObject::InternalSideUserObject(const InputParameters & parameters) :
-    UserObject(parameters),
+InternalSideUserObject::InternalSideUserObject(const InputParameters & parameters)
+  : UserObject(parameters),
     BlockRestrictable(parameters),
     TwoMaterialPropertyInterface(this, blockIDs()),
     NeighborCoupleable(this, false, false),
@@ -44,11 +46,16 @@ InternalSideUserObject::InternalSideUserObject(const InputParameters & parameter
     _current_side(_assembly.side()),
     _current_side_elem(_assembly.sideElem()),
     _current_side_volume(_assembly.sideElemVolume()),
-    _neighbor_elem(_assembly.neighbor()),
-    _neighbor_elem_volume(_assembly.neighborVolume())
+    _neighbor_elem(_assembly.neighbor())
 {
   // Keep track of which variables are coupled so we know what we depend on
   const std::vector<MooseVariable *> & coupled_vars = getCoupledMooseVars();
   for (const auto & var : coupled_vars)
     addMooseVariableDependency(var);
+}
+
+const Real &
+InternalSideUserObject::getNeighborElemVolume()
+{
+  return _assembly.neighborVolume();
 }

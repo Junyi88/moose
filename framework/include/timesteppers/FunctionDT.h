@@ -20,7 +20,7 @@
 
 class FunctionDT;
 
-template<>
+template <>
 InputParameters validParams<FunctionDT>();
 
 class FunctionDT : public TimeStepper
@@ -45,7 +45,8 @@ protected:
   const std::vector<Real> & _time_dt;
 
   /// Piecewise linear definition of time stepping
-  LinearInterpolation _time_ipol;
+  std::unique_ptr<LinearInterpolation> _time_ipol;
+
   Real _growth_factor;
   /// True if cut back of the time step occurred
   bool _cutback_occurred;
@@ -57,4 +58,4 @@ protected:
   std::vector<Real> _time_knots;
 };
 
-#endif /* FUNCTIONDT_H_ */
+#endif /* FUNCTIONDT_H */

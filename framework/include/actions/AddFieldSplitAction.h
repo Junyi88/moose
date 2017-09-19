@@ -12,16 +12,15 @@
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
 
-#ifndef ADDFIELDSPLITACTION_H_
-#define ADDFIELDSPLITACTION_H_
+#ifndef ADDFIELDSPLITACTION_H
+#define ADDFIELDSPLITACTION_H
 
 #include "MooseObjectAction.h"
 
 class AddFieldSplitAction;
 
-template<>
+template <>
 InputParameters validParams<AddFieldSplitAction>();
-
 
 class AddFieldSplitAction : public MooseObjectAction
 {
@@ -32,7 +31,4 @@ public:
   void act();
 };
 
-
-
-
-#endif /* ADDFIELDSPLITACTION_H_ */
+#endif /* ADDFIELDSPLITACTION_H */

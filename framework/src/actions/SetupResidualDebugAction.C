@@ -12,24 +12,28 @@
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
 
-// MOOSE includes
 #include "SetupResidualDebugAction.h"
-#include "FEProblem.h"
+
+// MOOSE includes
 #include "ActionWarehouse.h"
 #include "Factory.h"
-#include "NonlinearSystem.h"
+#include "FEProblem.h"
+#include "MooseVariable.h"
+#include "NonlinearSystemBase.h"
 
-template<>
-InputParameters validParams<SetupResidualDebugAction>()
+template <>
+InputParameters
+validParams<SetupResidualDebugAction>()
 {
   InputParameters params = validParams<Action>();
-  params.addParam<std::vector<NonlinearVariableName> >("show_var_residual", "Variables for which residuals will be sent to the output file");
+  params.addParam<std::vector<NonlinearVariableName>>(
+      "show_var_residual", "Variables for which residuals will be sent to the output file");
   return params;
 }
 
-SetupResidualDebugAction::SetupResidualDebugAction(InputParameters parameters) :
-    Action(parameters),
-    _show_var_residual(getParam<std::vector<NonlinearVariableName> >("show_var_residual"))
+SetupResidualDebugAction::SetupResidualDebugAction(InputParameters parameters)
+  : Action(parameters),
+    _show_var_residual(getParam<std::vector<NonlinearVariableName>>("show_var_residual"))
 {
 }
 
@@ -39,7 +43,7 @@ SetupResidualDebugAction::act()
   if (_problem.get() == NULL)
     return;
 
-  _problem->getNonlinearSystem().debuggingResiduals(true);
+  _problem->getNonlinearSystemBase().debuggingResiduals(true);
 
   // debug variable residuals
   for (const auto & var_name : _show_var_residual)

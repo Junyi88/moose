@@ -17,7 +17,6 @@
 
 #include "ThreadedElementLoopBase.h"
 
-// libMesh includes
 #include "libmesh/stored_range.h"
 
 class CacheChangedListsThread : public ThreadedElementLoopBase<ConstElemRange>
@@ -38,7 +37,7 @@ public:
   std::vector<const Elem *> _coarsened_elements;
 
   /// Map of Parent elements to children elements for elements that were just coarsened.
-  std::map<const Elem *, std::vector<const Elem *> > _coarsened_element_children;
+  std::map<const Elem *, std::vector<const Elem *>> _coarsened_element_children;
 };
 
-#endif //CACHECHANGEDLISTSTHREAD_H
+#endif // CACHECHANGEDLISTSTHREAD_H

@@ -5,7 +5,6 @@
 /*             See LICENSE for full restrictions                */
 /****************************************************************/
 
-
 #include "RichardsApp.h"
 #include "Moose.h"
 #include "AppFactory.h"
@@ -95,7 +94,7 @@
 #include "Q2PNodalMass.h"
 #include "Q2PNegativeNodalMassOld.h"
 
-  // BoundaryConditions
+// BoundaryConditions
 #include "RichardsExcav.h"
 #include "RichardsPiecewiseLinearSink.h"
 #include "RichardsHalfGaussianSink.h"
@@ -104,28 +103,27 @@
 // Problems
 #include "RichardsMultiphaseProblem.h"
 
-template<>
-InputParameters validParams<RichardsApp>()
+template <>
+InputParameters
+validParams<RichardsApp>()
 {
   InputParameters params = validParams<MooseApp>();
-  params.set<bool>("use_legacy_uo_initialization") = false;
-  params.set<bool>("use_legacy_uo_aux_computation") = false;
   return params;
 }
 
-RichardsApp::RichardsApp(const InputParameters & parameters) :
-    MooseApp(parameters)
+RichardsApp::RichardsApp(const InputParameters & parameters) : MooseApp(parameters)
 {
   Moose::registerObjects(_factory);
   RichardsApp::registerObjects(_factory);
 
   Moose::associateSyntax(_syntax, _action_factory);
   RichardsApp::associateSyntax(_syntax, _action_factory);
+
+  mooseDeprecated("Please use the PorousFlow module instead.  If Richards contains functionality "
+                  "not included in PorousFlow, please contact the moose-users google group");
 }
 
-RichardsApp::~RichardsApp()
-{
-}
+RichardsApp::~RichardsApp() {}
 
 void
 RichardsApp::registerApps()
@@ -230,10 +228,10 @@ RichardsApp::registerObjects(Factory & factory)
 void
 RichardsApp::associateSyntax(Syntax & syntax, ActionFactory & action_factory)
 {
-  syntax.registerActionSyntax("Q2PAction", "Q2P", "add_kernel");
-  syntax.registerActionSyntax("Q2PAction", "Q2P", "add_aux_variable");
-  syntax.registerActionSyntax("Q2PAction", "Q2P", "add_function");
-  syntax.registerActionSyntax("Q2PAction", "Q2P", "add_postprocessor");
+  registerSyntaxTask("Q2PAction", "Q2P", "add_kernel");
+  registerSyntaxTask("Q2PAction", "Q2P", "add_aux_variable");
+  registerSyntaxTask("Q2PAction", "Q2P", "add_function");
+  registerSyntaxTask("Q2PAction", "Q2P", "add_postprocessor");
 
   registerAction(Q2PAction, "add_kernel");
   registerAction(Q2PAction, "add_aux_variable");

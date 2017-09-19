@@ -15,15 +15,14 @@
 #ifndef LAPLACIANJUMPINDICATOR_H
 #define LAPLACIANJUMPINDICATOR_H
 
-#include "JumpIndicator.h"
+#include "InternalSideIndicator.h"
 
 class LaplacianJumpIndicator;
 
-template<>
+template <>
 InputParameters validParams<LaplacianJumpIndicator>();
 
-class LaplacianJumpIndicator :
-  public JumpIndicator
+class LaplacianJumpIndicator : public InternalSideIndicator
 {
 public:
   LaplacianJumpIndicator(const InputParameters & parameters);

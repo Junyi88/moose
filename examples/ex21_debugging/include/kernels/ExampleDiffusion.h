@@ -17,20 +17,19 @@
 
 #include "Diffusion.h"
 
-//Forward Declarations
+// Forward Declarations
 class ExampleDiffusion;
 
 /**
  * validParams returns the parameters that this Kernel accepts / needs
  * The actual body of the function MUST be in the .C file.
  */
-template<>
+template <>
 InputParameters validParams<ExampleDiffusion>();
 
 class ExampleDiffusion : public Diffusion
 {
 public:
-
   ExampleDiffusion(const InputParameters & parameters);
 
 protected:
@@ -45,6 +44,6 @@ protected:
    * Do NOT copy this line of code!
    */
 
-  VariableValue _coupled_coef;
+  const VariableValue _coupled_coef;
 };
-#endif //EXAMPLEDIFFUSION_H
+#endif // EXAMPLEDIFFUSION_H

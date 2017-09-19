@@ -36,14 +36,17 @@ public:
   /**
    * Add Kernel to the storage structure
    */
-  void addObject(MooseSharedPointer<KernelBase> object, THREAD_ID tid = 0) override;
+  void addObject(std::shared_ptr<KernelBase> object, THREAD_ID tid = 0) override;
 
   ///@{
   /**
    * Methods for checking/getting variable kernels for a variable and SubdomainID
    */
-  bool hasActiveVariableBlockObjects(unsigned int variable_id, SubdomainID block_id, THREAD_ID tid = 0) const;
-  const std::vector<MooseSharedPointer<KernelBase> > & getActiveVariableBlockObjects(unsigned int variable_id, SubdomainID block_id, THREAD_ID tid = 0) const;
+  bool hasActiveVariableBlockObjects(unsigned int variable_id,
+                                     SubdomainID block_id,
+                                     THREAD_ID tid = 0) const;
+  const std::vector<std::shared_ptr<KernelBase>> & getActiveVariableBlockObjects(
+      unsigned int variable_id, SubdomainID block_id, THREAD_ID tid = 0) const;
   ///@}
 
   /**
@@ -53,7 +56,7 @@ public:
 
 protected:
   /// Variable based storage
-  std::map<unsigned int, MooseObjectWarehouse<KernelBase> > _variable_kernel_storage;
+  std::map<unsigned int, MooseObjectWarehouse<KernelBase>> _variable_kernel_storage;
 };
 
 #endif // KERNELWAREHOUSE_H

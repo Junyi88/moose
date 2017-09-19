@@ -21,7 +21,7 @@
 
 [GlobalParams]
   # Parameters used by several kernels that are defined globally to simplify input file
-  op_num = 8 # Number of order parameters used
+  op_num = 9 # Number of order parameters used
   var_name_base = gr # Base name of grains
 []
 
@@ -31,12 +31,25 @@
   [../]
 []
 
+[UserObjects]
+  [./voronoi]
+    type = PolycrystalVoronoi
+    grain_num = 20 # Number of grains
+    rand_seed = 10
+    coloring_algorithm = bt
+  [../]
+  [./grain_tracker]
+    type = GrainTracker
+    threshold = 0.2
+    connecting_threshold = 0.08
+    compute_halo_maps = true # Only necessary for displaying HALOS
+  [../]
+[]
+
 [ICs]
   [./PolycrystalICs]
-    [./PolycrystalVoronoiIC]
-      grain_num = 20 #Number of grains
-      advanced_op_assignment = true
-      rand_seed = 10
+    [./PolycrystalColoringIC]
+      polycrystal_ic_uo = voronoi
     [../]
   [../]
 []
@@ -132,12 +145,6 @@
 
 [Postprocessors]
   # Scalar postprocessors
-  [./grain_tracker]
-    type = GrainTracker
-    threshold = 0.2
-    connecting_threshold = 0.08
-    flood_entity_type = ELEMENTAL
-  [../]
   [./dt]
     # Outputs the current time step
     type = TimestepSize
@@ -176,10 +183,6 @@
     coarsen_fraction = 0.1 # Fraction of low error that will coarsened
     max_h_level = 3 # Max number of refinements used, starting from initial mesh (before uniform refinement)
   [../]
-[]
-
-[Problem]
-  use_legacy_uo_initialization = false
 []
 
 [Outputs]

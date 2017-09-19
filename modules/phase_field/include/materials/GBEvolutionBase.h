@@ -8,14 +8,15 @@
 #define GBEVOLUTIONBASE_H
 
 #include "Material.h"
+#include "DerivativeMaterialInterface.h"
 
-//Forward Declarations
+// Forward Declarations
 class GBEvolutionBase;
 
-template<>
+template <>
 InputParameters validParams<GBEvolutionBase>();
 
-class GBEvolutionBase : public Material
+class GBEvolutionBase : public DerivativeMaterialInterface<Material>
 {
 public:
   GBEvolutionBase(const InputParameters & parameters);
@@ -39,15 +40,15 @@ protected:
   MaterialProperty<Real> & _kappa;
   MaterialProperty<Real> & _gamma;
   MaterialProperty<Real> & _L;
+  MaterialProperty<Real> * _dLdT;
   MaterialProperty<Real> & _l_GB;
   MaterialProperty<Real> & _mu;
   MaterialProperty<Real> & _entropy_diff;
   MaterialProperty<Real> & _molar_volume;
   MaterialProperty<Real> & _act_wGB;
-  MaterialProperty<Real> & _tgrad_corr_mult;
 
   const Real _kb;
   const Real _JtoeV;
 };
 
-#endif //GBEVOLUTIONBASE_H
+#endif // GBEVOLUTIONBASE_H

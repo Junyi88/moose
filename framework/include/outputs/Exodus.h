@@ -16,7 +16,6 @@
 #define EXODUS_H
 
 // MOOSE includes
-#include "AdvancedOutput.h"
 #include "OversampleOutput.h"
 
 // Forward declarations
@@ -28,16 +27,15 @@ namespace libMesh
 class ExodusII_IO;
 }
 
-template<>
+template <>
 InputParameters validParams<Exodus>();
 
 /**
  * Class for output data to the ExodusII format
  */
-class Exodus : public AdvancedOutput<OversampleOutput>
+class Exodus : public OversampleOutput
 {
 public:
-
   /**
    * Class constructor
    */
@@ -80,7 +78,6 @@ public:
   virtual void sequence(bool state);
 
 protected:
-
   /**
    * Outputs nodal, nonlinear variables
    */
@@ -114,7 +111,7 @@ protected:
   virtual std::string filename() override;
 
   /// Pointer to the libMesh::ExodusII_IO object that performs the actual data output
-  MooseSharedPointer<ExodusII_IO> _exodus_io_ptr;
+  std::unique_ptr<ExodusII_IO> _exodus_io_ptr;
 
   /// Storage for scalar values (postprocessors and scalar AuxVariables)
   std::vector<Real> _global_values;
@@ -125,19 +122,21 @@ protected:
   /**
    * Flag for indicating the status of the ExodusII file that is being written. The ExodusII_IO
    * interface requires that the file be 'initialized' prior to writing any type of data. This
-   * initialization occurs when write_timestep() is called. However, write_timestep also writes nodal
-   * data, so in the case where no nodal data is output, it is necessary to call write_timestep() after
-   * calling set_output_variables with an empty input string. This flag allows for the various output
+   * initialization occurs when write_timestep() is called. However, write_timestep also writes
+   * nodal
+   * data, so in the case where no nodal data is output, it is necessary to call write_timestep()
+   * after
+   * calling set_output_variables with an empty input string. This flag allows for the various
+   * output
    * methods to check that the ExodusII file is in the proper state prior to writing data.
    * @see outputEmptyTimestep()
    */
   bool _exodus_initialized;
 
-
 private:
-
   /**
-   * A helper function for 'initializing' the ExodusII output file, see the comments for the _initialized
+   * A helper function for 'initializing' the ExodusII output file, see the comments for the
+   * _initialized
    * member variable.
    * @see _initialized
    */

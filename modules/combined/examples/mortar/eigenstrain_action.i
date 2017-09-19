@@ -14,14 +14,10 @@
   periodic_directions = 'x y'
 []
 
-[Modules]
-  [./PhaseField]
-    [./MortarPeriodicity]
-      [./strain]
-        variable = 'disp_x disp_y'
-        periodicity = gradient
-      [../]
-    [../]
+[Modules/PhaseField/MortarPeriodicity]
+  [./strain]
+    variable = 'disp_x disp_y'
+    periodicity = gradient
   [../]
 []
 
@@ -172,6 +168,7 @@
     type = ComputeSmallStrain
     block = 0
     displacements = 'disp_x disp_y'
+    eigenstrains = eigenstrain
   [../]
 
   [./eigenstrain]
@@ -180,6 +177,7 @@
     tensors = 'shear1  shear2  expand3'
     weights = 'weight1 weight2 weight3'
     args = c
+    eigenstrain_name = eigenstrain
   [../]
 
   [./stress]

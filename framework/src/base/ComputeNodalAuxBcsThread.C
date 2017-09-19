@@ -12,7 +12,6 @@
 /*            See COPYRIGHT for full restrictions               */
 /****************************************************************/
 
-// libMesh includes
 #include "libmesh/threads.h"
 
 // MOOSE includes
@@ -21,19 +20,18 @@
 #include "FEProblem.h"
 #include "AuxKernel.h"
 
-
-ComputeNodalAuxBcsThread::ComputeNodalAuxBcsThread(FEProblem & fe_problem,
-                                                   AuxiliarySystem & sys,
-                                                   const MooseObjectWarehouse<AuxKernel> & storage) :
-    ThreadedNodeLoop<ConstBndNodeRange, ConstBndNodeRange::const_iterator>(fe_problem),
-    _aux_sys(sys),
+ComputeNodalAuxBcsThread::ComputeNodalAuxBcsThread(FEProblemBase & fe_problem,
+                                                   const MooseObjectWarehouse<AuxKernel> & storage)
+  : ThreadedNodeLoop<ConstBndNodeRange, ConstBndNodeRange::const_iterator>(fe_problem),
+    _aux_sys(fe_problem.getAuxiliarySystem()),
     _storage(storage)
 {
 }
 
 // Splitting Constructor
-ComputeNodalAuxBcsThread::ComputeNodalAuxBcsThread(ComputeNodalAuxBcsThread & x, Threads::split split) :
-    ThreadedNodeLoop<ConstBndNodeRange, ConstBndNodeRange::const_iterator>(x, split),
+ComputeNodalAuxBcsThread::ComputeNodalAuxBcsThread(ComputeNodalAuxBcsThread & x,
+                                                   Threads::split split)
+  : ThreadedNodeLoop<ConstBndNodeRange, ConstBndNodeRange::const_iterator>(x, split),
     _aux_sys(x._aux_sys),
     _storage(x._storage)
 {
@@ -58,10 +56,10 @@ ComputeNodalAuxBcsThread::onNode(ConstBndNodeRange::const_iterator & node_it)
   if (node->processor_id() == _fe_problem.processor_id())
   {
     // Get a map of all active block restricted AuxKernel objects
-    const std::map<BoundaryID, std::vector<MooseSharedPointer<AuxKernel> > > & kernels = _storage.getActiveBoundaryObjects(_tid);
+    const auto & kernels = _storage.getActiveBoundaryObjects(_tid);
 
     // Operate on the node BoundaryID only
-    const std::map<BoundaryID, std::vector<MooseSharedPointer<AuxKernel> > >::const_iterator iter = kernels.find(boundary_id);
+    const auto iter = kernels.find(boundary_id);
     if (iter != kernels.end())
     {
       _fe_problem.reinitNodeFace(node, boundary_id, _tid);

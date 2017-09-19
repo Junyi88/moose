@@ -24,16 +24,16 @@
 // Forward Declarations
 class Transient;
 class TimeStepper;
-class FEProblem;
+class FEProblemBase;
 
-template<>
+template <>
 InputParameters validParams<Transient>();
 
 /**
  * Transient executioners usually loop through a number of timesteps... calling solve()
  * for each timestep.
  */
-class Transient: public Executioner
+class Transient : public Executioner
 {
 public:
   /**
@@ -110,7 +110,7 @@ public:
   /**
    * Set the old time.
    */
-  virtual void setTimeOld(Real t){ _time_old = t; };
+  virtual void setTimeOld(Real t) { _time_old = t; };
 
   /**
    * Get the Relative L2 norm of the change in the solution.
@@ -121,14 +121,14 @@ public:
    * Pointer to the TimeStepper
    * @return Pointer to the time stepper for this Executioner
    */
-  TimeStepper * getTimeStepper(){ return _time_stepper.get(); }
+  TimeStepper * getTimeStepper() { return _time_stepper.get(); }
 
   /**
    * Set the timestepper to use.
    *
    * @param ts The TimeStepper to use
    */
-  void setTimeStepper(MooseSharedPointer<TimeStepper> ts) { _time_stepper = ts; }
+  void setTimeStepper(std::shared_ptr<TimeStepper> ts) { _time_stepper = ts; }
 
   /**
    * Get the timestepper.
@@ -201,10 +201,14 @@ public:
    * Get the number of Picard iterations performed
    * @return Number of Picard iterations performed
    */
-  //Because this returns the number of Picard iterations, rather than the current
-  //iteration count (which starts at 0), increment by 1.
-  Real numPicardIts() { return _picard_it+1; }
+  // Because this returns the number of Picard iterations, rather than the current
+  // iteration count (which starts at 0), increment by 1.
+  Real numPicardIts() { return _picard_it + 1; }
 
+  /**
+   * The relative L2 norm of the difference between solution and old solution vector.
+   */
+  virtual Real relativeSolutionDifferenceNorm();
 
 protected:
   /**
@@ -213,10 +217,10 @@ protected:
   virtual void solveStep(Real input_dt = -1.0);
 
   /// Here for backward compatibility
-  FEProblem & _problem;
+  FEProblemBase & _problem;
 
   MooseEnum _time_scheme;
-  MooseSharedPointer<TimeStepper> _time_stepper;
+  std::shared_ptr<TimeStepper> _time_stepper;
 
   /// Current timestep.
   int & _t_step;
@@ -279,7 +283,7 @@ protected:
    * Picard Related
    */
   /// Number of Picard iterations to perform
-  int  & _picard_it;
+  int & _picard_it;
   Real _picard_max_its;
   bool & _picard_converged;
   Real & _picard_initial_norm;
@@ -293,7 +297,10 @@ protected:
 
   Real _solution_change_norm;
 
+  /// The difference of current and old solutions
+  NumericVector<Number> & _sln_diff;
+
   void setupTimeIntegrator();
 };
 
-#endif //TRANSIENTEXECUTIONER_H
+#endif // TRANSIENTEXECUTIONER_H

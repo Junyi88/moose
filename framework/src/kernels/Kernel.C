@@ -13,26 +13,29 @@
 /****************************************************************/
 
 #include "Kernel.h"
+
+// MOOSE includes
 #include "Assembly.h"
 #include "MooseVariable.h"
+#include "MooseVariableScalar.h"
 #include "Problem.h"
 #include "SubProblem.h"
 #include "SystemBase.h"
 
-// libmesh includes
 #include "libmesh/threads.h"
 #include "libmesh/quadrature.h"
 
-template<>
-InputParameters validParams<Kernel>()
+template <>
+InputParameters
+validParams<Kernel>()
 {
   InputParameters params = validParams<KernelBase>();
   params.registerBase("Kernel");
   return params;
 }
 
-Kernel::Kernel(const InputParameters & parameters) :
-    KernelBase(parameters),
+Kernel::Kernel(const InputParameters & parameters)
+  : KernelBase(parameters),
     _u(_is_implicit ? _var.sln() : _var.slnOld()),
     _grad_u(_is_implicit ? _var.gradSln() : _var.gradSlnOld()),
     _u_dot(_var.uDot()),
@@ -69,6 +72,7 @@ Kernel::computeJacobian()
   _local_ke.resize(ke.m(), ke.n());
   _local_ke.zero();
 
+  precalculateJacobian();
   for (_i = 0; _i < _test.size(); _i++)
     for (_j = 0; _j < _phi.size(); _j++)
       for (_qp = 0; _qp < _qrule->n_points(); _qp++)
@@ -80,8 +84,8 @@ Kernel::computeJacobian()
   {
     unsigned int rows = ke.m();
     DenseVector<Number> diag(rows);
-    for (unsigned int i=0; i<rows; i++)
-      diag(i) = _local_ke(i,i);
+    for (unsigned int i = 0; i < rows; i++)
+      diag(i) = _local_ke(i, i);
 
     Threads::spin_mutex::scoped_lock lock(Threads::spin_mtx);
     for (const auto & var : _diag_save_in)
@@ -98,6 +102,7 @@ Kernel::computeOffDiagJacobian(unsigned int jvar)
   {
     DenseMatrix<Number> & ke = _assembly.jacobianBlock(_var.number(), jvar);
 
+    precalculateOffDiagJacobian(jvar);
     for (_i = 0; _i < _test.size(); _i++)
       for (_j = 0; _j < _phi.size(); _j++)
         for (_qp = 0; _qp < _qrule->n_points(); _qp++)

@@ -13,7 +13,7 @@
 class NSKernel;
 class IdealGasFluidProperties;
 
-template<>
+template <>
 InputParameters validParams<NSKernel>();
 
 /**
@@ -63,10 +63,11 @@ protected:
   const IdealGasFluidProperties & _fp;
 
   /**
-   * Helper function for mapping Moose variable numberings into
+   * Helper functions for mapping Moose variable numberings into
    * the "canonical" numbering for the compressible NS equations.
    */
+  bool isNSVariable(unsigned var);
   unsigned mapVarNumber(unsigned var);
 };
 
-#endif //NSKERNEL_H
+#endif // NSKERNEL_H
